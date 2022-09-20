@@ -3137,15 +3137,15 @@ object Parsers {
       val paramFlags = if ofClass then LocalParamAccessor else Param
       tps.map(makeSyntheticParameter(nextIdx, _, paramFlags | Synthetic | impliedMods.flags))
 
-    /** ClsParamClause    ::=  ‘(’ [‘erased’] ClsParams ‘)’ | UsingClsParamClause
-     *  UsingClsParamClause::= ‘(’ ‘using’ [‘erased’] (ClsParams | ContextTypes) ‘)’
+    /** ClsParamClause    ::=  ‘(’ ClsParams ‘)’ | UsingClsParamClause
+     *  UsingClsParamClause::= ‘(’ ‘using’ (ClsParams | ContextTypes) ‘)’
      *  ClsParams         ::=  ClsParam {‘,’ ClsParam}
-     *  ClsParam          ::=  {Annotation}
+     *  ClsParam          ::=  {Annotation} [‘erased’] Param
      *
-     *  DefParamClause    ::=  ‘(’ [‘erased’] DefParams ‘)’ | UsingParamClause
-     *  UsingParamClause  ::=  ‘(’ ‘using’ [‘erased’] (DefParams | ContextTypes) ‘)’
+     *  DefParamClause    ::=  ‘(’ DefParams ‘)’ | UsingParamClause
+     *  UsingParamClause  ::=  ‘(’ ‘using’ (DefParams | ContextTypes) ‘)’
      *  DefParams         ::=  DefParam {‘,’ DefParam}
-     *  DefParam          ::=  {Annotation} [‘inline’] Param
+     *  DefParam          ::=  {Annotation} [‘erased’] [‘inline’] Param
      *
      *  Param             ::=  id `:' ParamType [`=' Expr]
      *
@@ -3168,12 +3168,12 @@ object Parsers {
         else
           if isIdent(nme.using) then
             addParamMod(() => Mod.Given())
-          if isErased then
-            addParamMod(() => Mod.Erased())
 
       def param(): ValDef = {
         val start = in.offset
         var mods = impliedMods.withAnnotations(annotations())
+        if (isErased && in.isSoftModifierInParamModifierPosition)
+          mods = addModifier(mods)
         if (ofClass) {
           mods = addFlag(modifiers(start = mods), ParamAccessor)
           mods =
@@ -3184,12 +3184,11 @@ object Parsers {
               val mod = atSpan(in.skipToken()) { Mod.Var() }
               addMod(mods, mod)
             else
-              if (!(mods.flags &~ (ParamAccessor | Inline | impliedMods.flags)).isEmpty)
+              if (!(mods.flags &~ (ParamAccessor | Inline | Erased | impliedMods.flags)).isEmpty)
                 syntaxError("`val` or `var` expected")
               if (firstClause && ofCaseClass) mods
               else mods | PrivateLocal
-        }
-        else {
+        } else {
           if (isIdent(nme.inline) && in.isSoftModifierInParamModifierPosition)
             mods = addModifier(mods)
           mods |= Param
@@ -3235,7 +3234,7 @@ object Parsers {
               val isParams =
                 !impliedMods.is(Given)
                 || startParamTokens.contains(in.token)
-                || isIdent && (in.name == nme.inline || in.lookahead.isColon)
+                || isIdent && (in.name == nme.inline || in.name == nme.erased || in.lookahead.isColon)
               if isParams then commaSeparated(() => param())
               else contextTypes(ofClass, nparams, impliedMods)
           checkVarArgsRules(clause)
