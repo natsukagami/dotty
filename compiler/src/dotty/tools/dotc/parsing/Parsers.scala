@@ -3128,14 +3128,23 @@ object Parsers {
     def typeParamClauseOpt(ownerKind: ParamOwner): List[TypeDef] =
       if (in.token == LBRACKET) typeParamClause(ownerKind) else Nil
 
-    /** ContextTypes   ::=  FunArgType {‘,’ FunArgType}
+    /** ContextTypes   ::=  ContextType {‘,’ ContextType}
+        ContextType    ::=  [‘erased’] FunArgType
      */
-    def contextTypes(ofClass: Boolean, nparams: Int, impliedMods: Modifiers): List[ValDef] =
-      val tps = commaSeparated(funArgType)
+    def contextTypes(ofClass: Boolean, nparams: Int, impliedMods: Modifiers, scannedMods: Modifiers): List[ValDef] =
       var counter = nparams
+      var firstMods = scannedMods
       def nextIdx = { counter += 1; counter }
-      val paramFlags = if ofClass then LocalParamAccessor else Param
-      tps.map(makeSyntheticParameter(nextIdx, _, paramFlags | Synthetic | impliedMods.flags))
+
+      def contextType = () =>
+        var mods = impliedMods | firstMods.flags
+        firstMods = EmptyModifiers // only use the first time
+        val paramFlags = if ofClass then LocalParamAccessor else Param
+        if (isErased && in.isSoftModifierInParamModifierPosition)
+          mods = addModifier(mods)
+        makeSyntheticParameter(nextIdx, funArgType(), paramFlags | Synthetic | mods.flags)
+
+      commaSeparated(contextType)
 
     /** ClsParamClause    ::=  ‘(’ ClsParams ‘)’ | UsingClsParamClause
      *  UsingClsParamClause::= ‘(’ ‘using’ (ClsParams | ContextTypes) ‘)’
@@ -3169,9 +3178,9 @@ object Parsers {
           if isIdent(nme.using) then
             addParamMod(() => Mod.Given())
 
-      def param(): ValDef = {
+      def param(additionalMods: Modifiers = EmptyModifiers): ValDef = {
         val start = in.offset
-        var mods = impliedMods.withAnnotations(annotations())
+        var mods = impliedMods.withAnnotations(annotations()) | additionalMods.flags
         if (isErased && in.isSoftModifierInParamModifierPosition)
           mods = addModifier(mods)
         if (ofClass) {
@@ -3226,17 +3235,32 @@ object Parsers {
         if in.token == RPAREN && !prefix && !impliedMods.is(Given) then Nil
         else
           val clause =
-            if prefix && !isIdent(nme.using) && !isIdent(nme.erased) then param() :: Nil
+            if prefix && !isIdent(nme.using) then param() :: Nil
             else
               paramMods()
               if givenOnly && !impliedMods.is(Given) then
                 syntaxError("`using` expected")
+              // eagerly read in the first modifiers of the first parameter/context type,
+              // so that we can differentiate between context types and parameters.
+              val firstMods =
+                var mods = EmptyModifiers
+                if (isIdent(nme.inline) && in.isSoftModifierInParamModifierPosition)
+                  mods = addModifier(mods)
+                if (isErased && in.isSoftModifierInParamModifierPosition)
+                  mods = addModifier(mods)
+                mods
               val isParams =
                 !impliedMods.is(Given)
                 || startParamTokens.contains(in.token)
-                || isIdent && (in.name == nme.inline || in.name == nme.erased || in.lookahead.isColon)
-              if isParams then commaSeparated(() => param())
-              else contextTypes(ofClass, nparams, impliedMods)
+                || isIdent && in.lookahead.isColon
+              if isParams then
+                var modsToAdd = firstMods
+                commaSeparated(() =>
+                    val p = param(modsToAdd)
+                    modsToAdd = EmptyModifiers
+                    p
+                  )
+              else contextTypes(ofClass, nparams, impliedMods, firstMods)
           checkVarArgsRules(clause)
           clause
       }
