@@ -3678,7 +3678,7 @@ object Types {
             else Signature(tp, sourceLanguage)
         this match
           case tp: MethodType =>
-            val params = if (isErasedMethod) Nil else tp.paramInfos
+            val params = tp.paramInfos.filterConserve(!_.hasAnnotation(defn.ErasedParamAnnot))
             resultSignature.prependTermParams(params, sourceLanguage)
           case tp: PolyType =>
             resultSignature.prependTypeParams(tp.paramNames.length)
@@ -3883,6 +3883,8 @@ object Types {
     assert(resType.exists)
 
     def companion: MethodTypeCompanion
+
+    def hasErasedParam(using Context): Boolean = paramInfos.exists(_.hasAnnotation(defn.ErasedParamAnnot))
 
     final override def isImplicitMethod: Boolean =
       companion.eq(ImplicitMethodType) ||

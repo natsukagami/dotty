@@ -638,7 +638,9 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
     case tp: MethodType =>
       def paramErasure(tpToErase: Type) =
         erasureFn(sourceLanguage, semiEraseVCs, isConstructor, isSymbol, wildcardOK)(tpToErase)
-      val (names, formals0) = if (tp.isErasedMethod) (Nil, Nil) else (tp.paramNames, tp.paramInfos)
+      val (names, formals0) = if !tp.hasErasedParam
+        then (tp.paramNames, tp.paramInfos)
+        else tp.paramNames.zip(tp.paramInfos).filter((_, info) => !info.hasAnnotation(defn.ErasedParamAnnot)).unzip
       val formals = formals0.mapConserve(paramErasure)
       eraseResult(tp.resultType) match {
         case rt: MethodType =>

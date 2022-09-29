@@ -822,8 +822,9 @@ object Erasure {
     override def typedApply(tree: untpd.Apply, pt: Type)(using Context): Tree =
       val Apply(fun, args) = tree
       val origFun = fun.asInstanceOf[tpd.Tree]
-      val origFunType = origFun.tpe.widen(using preErasureCtx)
-      val ownArgs = if origFunType.isErasedMethod then Nil else args
+      val origFunType = origFun.tpe.widen(using preErasureCtx).asInstanceOf[MethodType]
+      val ownArgs = args.zip(origFunType.paramInfos).flatMap((arg, param) =>
+        if !param.hasAnnotation(defn.ErasedParamAnnot) then Some(arg) else None)
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match
         case mt: MethodType =>

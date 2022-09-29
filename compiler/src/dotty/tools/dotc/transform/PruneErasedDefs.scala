@@ -13,6 +13,7 @@ import ast.tpd
 import SymUtils._
 import config.Feature
 import Decorators.*
+import dotty.tools.dotc.core.Types.MethodType
 
 /** This phase makes all erased term members of classes private so that they cannot
  *  conflict with non-erased members. This is needed so that subsequent phases like
@@ -38,8 +39,11 @@ class PruneErasedDefs extends MiniPhase with SymTransformer { thisTransform =>
     else sym.copySymDenotation(initFlags = sym.flags | Private)
 
   override def transformApply(tree: Apply)(using Context): Tree =
-    if !tree.fun.tpe.widen.isErasedMethod then tree
-    else cpy.Apply(tree)(tree.fun, tree.args.map(trivialErasedTree))
+    val methType = tree.fun.tpe.widen.asInstanceOf[MethodType]
+    if !methType.hasErasedParam then tree
+    else cpy.Apply(tree)(tree.fun, tree.args.zipWithConserve(methType.paramInfos)((arg, param) =>
+        if param.hasAnnotation(defn.ErasedParamAnnot) then trivialErasedTree(arg) else arg
+      ))
 
   override def transformValDef(tree: ValDef)(using Context): Tree =
     checkErasedInExperimental(tree.symbol)
