@@ -2131,7 +2131,7 @@ class QuotesImpl private (using val ctx: Context) extends Quotes, QuoteUnpickler
 
     given MethodTypeMethods: MethodTypeMethods with
       extension (self: MethodType)
-        def isErased: Boolean = self.isErasedMethod
+        def isErased: Boolean = ??? // TODO, IDK how to remove this
         def isImplicit: Boolean = self.isImplicitMethod
         def param(idx: Int): TypeRepr = self.newParamRef(idx)
       end extension

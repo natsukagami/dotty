@@ -376,6 +376,9 @@ object Types {
       case _ => false
     }
 
+    /** Is the type annotated to be erased? */
+    final def isAnnotErased(using Context): Boolean = hasAnnotation(defn.ErasedParamAnnot)
+
     /** Does this type have a supertype with an annotation satisfying given predicate `p`? */
     def derivesAnnotWith(p: Annotation => Boolean)(using Context): Boolean = this match {
       case tp: AnnotatedType => p(tp.annot) || tp.parent.derivesAnnotWith(p)
@@ -420,9 +423,6 @@ object Types {
 
     /** Is this a Method or PolyType which has contextual parameters as first value parameter list? */
     def isContextualMethod: Boolean = false
-
-    /** Is this a MethodType for which the parameters will not be used? */
-    def isErasedMethod: Boolean = false
 
     /** Is this a match type or a higher-kinded abstraction of one?
      */
@@ -1407,6 +1407,12 @@ object Types {
      */
     final def dealias(using Context): Type = dealias1(keepNever, keepOpaques = false)
 
+    /** Follow aliases and dereferences LazyRefs, annotated types and instantiated
+     *  TypeVars until type is no longer alias type, annotated type (unless it is an Erased annotation), LazyRef,
+     *  or instantiated type variable.
+     */
+    final def dealiasKeepErased(using Context): Type = dealias1(keepErased, keepOpaques = false)
+
     /** Follow aliases and dereferences LazyRefs and instantiated TypeVars until type
      *  is no longer alias type, LazyRef, or instantiated type variable.
      *  Goes through annotated types and rewraps annotations on the result.
@@ -1840,14 +1846,13 @@ object Types {
       case mt: MethodType if !mt.isParamDependent =>
         val formals1 = if (dropLast == 0) mt.paramInfos else mt.paramInfos dropRight dropLast
         val isContextual = mt.isContextualMethod && !ctx.erasedTypes
-        val isErased = mt.isErasedMethod && !ctx.erasedTypes
         val result1 = mt.nonDependentResultApprox match {
           case res: MethodType => res.toFunctionType(isJava)
           case res => res
         }
         val funType = defn.FunctionOf(
           formals1 mapConserve (_.translateFromRepeated(toArray = isJava)),
-          result1, isContextual, isErased)
+          result1, isContextual)
         if alwaysDependent || mt.isResultDependent then RefinedType(funType, nme.apply, mt)
         else funType
     }
@@ -3888,15 +3893,9 @@ object Types {
 
     final override def isImplicitMethod: Boolean =
       companion.eq(ImplicitMethodType) ||
-      companion.eq(ErasedImplicitMethodType) ||
       isContextualMethod
-    final override def isErasedMethod: Boolean =
-      companion.eq(ErasedMethodType) ||
-      companion.eq(ErasedImplicitMethodType) ||
-      companion.eq(ErasedContextualMethodType)
     final override def isContextualMethod: Boolean =
-      companion.eq(ContextualMethodType) ||
-      companion.eq(ErasedContextualMethodType)
+      companion.eq(ContextualMethodType)
 
     protected def prefixString: String = companion.prefixString
   }
@@ -3987,19 +3986,13 @@ object Types {
   }
 
   object MethodType extends MethodTypeCompanion("MethodType") {
-    def companion(isContextual: Boolean = false, isImplicit: Boolean = false, isErased: Boolean = false): MethodTypeCompanion =
-      if (isContextual)
-        if (isErased) ErasedContextualMethodType else ContextualMethodType
-      else if (isImplicit)
-        if (isErased) ErasedImplicitMethodType else ImplicitMethodType
-      else
-        if (isErased) ErasedMethodType else MethodType
+    def companion(isContextual: Boolean = false, isImplicit: Boolean = false): MethodTypeCompanion =
+      if (isContextual) ContextualMethodType
+      else if (isImplicit) ImplicitMethodType
+      else MethodType
   }
-  object ErasedMethodType extends MethodTypeCompanion("ErasedMethodType")
   object ContextualMethodType extends MethodTypeCompanion("ContextualMethodType")
-  object ErasedContextualMethodType extends MethodTypeCompanion("ErasedContextualMethodType")
   object ImplicitMethodType extends MethodTypeCompanion("ImplicitMethodType")
-  object ErasedImplicitMethodType extends MethodTypeCompanion("ErasedImplicitMethodType")
 
   /** A ternary extractor for MethodType */
   object MethodTpe {
@@ -6397,6 +6390,7 @@ object Types {
 
   private val keepAlways: AnnotatedType => Context ?=> Boolean = _ => true
   private val keepNever: AnnotatedType => Context ?=> Boolean = _ => false
+  private val keepErased: AnnotatedType => Context ?=> Boolean = _.annot.symbol == defn.ErasedParamAnnot
   private val keepIfRefining: AnnotatedType => Context ?=> Boolean = _.isRefining
 
   val isBounds: Type => Boolean = _.isInstanceOf[TypeBounds]

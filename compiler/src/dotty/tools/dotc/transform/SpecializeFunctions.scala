@@ -60,6 +60,7 @@ class SpecializeFunctions extends MiniPhase {
           .subst(ddef.termParamss.head.map(_.symbol), vparamss.head.map(_.symbol))
       })
 
+
     // create a forwarding to the specialized apply
     val args = ddef.termParamss.head.map(vparam => ref(vparam.symbol))
     val rhs = This(cls).select(specializedApply).appliedToTermArgs(args)
@@ -71,7 +72,7 @@ class SpecializeFunctions extends MiniPhase {
   override def transformApply(tree: Apply)(using Context) =
     tree match {
       case Apply(fun: NameTree, args) if fun.name == nme.apply && args.size <= 3 && fun.symbol.owner.isType =>
-        val argTypes = fun.tpe.widen.firstParamTypes.map(_.widenSingleton.dealias)
+        val argTypes = fun.tpe.widen.firstParamTypes.map(_.widenSingleton.dealiasKeepErased)
         val retType  = tree.tpe.widenSingleton.dealias
         val isSpecializable =
           defn.isSpecializableFunction(
@@ -98,7 +99,9 @@ class SpecializeFunctions extends MiniPhase {
                   tpd.This(prefix.cls).select(specializedApply)
                 case TermRef(prefix: NamedType, name) =>
                   tpd.ref(prefix).select(specializedApply)
-          newSel.appliedToTermArgs(args)
+          val ret = newSel.appliedToTermArgs(args)
+          println(s"++ specializing $tree\n\told fun = ${tree.fun.tpe}\n\tnew fun = ${ret.fun.tpe.widen}\n\targs = $argTypes\n\tnew sel = ${newSel.tpe.widen}")
+          ret
         else tree
       case _ => tree
     }

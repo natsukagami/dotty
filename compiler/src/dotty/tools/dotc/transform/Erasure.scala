@@ -35,6 +35,7 @@ import ExplicitOuter._
 import core.Mode
 import util.Property
 import reporting._
+import reporting.trace.force as trace
 
 class Erasure extends Phase with DenotTransformer {
 
@@ -491,7 +492,7 @@ object Erasure {
       val resultAdaptationNeeded =
         !sameClass(implResultType, samResultType) && !autoAdaptedResult
 
-      if paramAdaptationNeeded || resultAdaptationNeeded then
+      val ret = if paramAdaptationNeeded || resultAdaptationNeeded then
         // Instead of instantiating `scala.FunctionN`, see if we can instantiate
         // a specialized sub-interface where the SAM type matches the
         // implementation method type, thus avoiding the need for bridging.
@@ -513,7 +514,9 @@ object Erasure {
             else
               EmptyTypeName
           if !specializedFunctionalInterface.isEmpty then
-            return cpy.Closure(tree)(tpt = TypeTree(requiredClass(specializedFunctionalInterface).typeRef))
+            val ret = cpy.Closure(tree)(tpt = TypeTree(requiredClass(specializedFunctionalInterface).typeRef))
+            println(s" ? adapt closure $tree\n\t$implType\n\t$sam\n\t=> ${ret.show} | ${ret.tpe.widen}")
+            return ret
 
         // Otherwise, generate a new closure implemented with a bridge.
         val bridgeType =
@@ -535,6 +538,8 @@ object Erasure {
           targetType = functionalInterface).withSpan(tree.span)
       else
         tree
+      println(s" ? adapt closure $tree\n\t$implType\n\t$sam\n\t=> $ret")
+      ret
     end adaptClosure
   end Boxing
 
@@ -823,11 +828,17 @@ object Erasure {
       val Apply(fun, args) = tree
       val origFun = fun.asInstanceOf[tpd.Tree]
       val origFunType = origFun.tpe.widen(using preErasureCtx).asInstanceOf[MethodType]
+      fun match {
+        case Select(fv @ Ident(_), _) =>
+          println(s"> inspecting $fv\n\t=> ${fv.denot.info.asInstanceOf[MethodType].resType}\n\t=> $origFunType")
+        case _ =>
+      }
       val ownArgs = args.zip(origFunType.paramInfos).flatMap((arg, param) =>
-        if !param.hasAnnotation(defn.ErasedParamAnnot) then Some(arg) else None)
+        if !param.isAnnotErased then Some(arg) else None)
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match
         case mt: MethodType =>
+          println(s"> $fun1\n\twidened to = $mt\n\toriginal = $origFunType\n\toriginal widen = ${origFun.tpe.widen}")
           val (xmt,        // A method type like `mt` but with bunched arguments expanded to individual ones
                 bunchArgs,  // whether arguments are bunched
                 outers) =   // the outer reference parameter(s)
@@ -902,47 +913,51 @@ object Erasure {
      *  parameter of type `[]Object`.
      */
     override def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
-      if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
-        erasedDef(sym)
-      else
-        checkNotErasedClass(sym.info.finalResultType, ddef)
-        val restpe = if sym.isConstructor then defn.UnitType else sym.info.resultType
-        var vparams = outerParamDefs(sym)
-            ::: ddef.paramss.collect {
-              case untpd.ValDefs(vparams) => vparams
-            }.flatten.filterConserve(!_.symbol.is(Flags.Erased))
+      trace(i"typing ${ddef.showSummary()}", show = true) {
+        if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
+          erasedDef(sym)
+        else
+          checkNotErasedClass(sym.info.finalResultType, ddef)
+          val restpe = if sym.isConstructor then defn.UnitType else sym.info.resultType
+          var vparams = outerParamDefs(sym)
+              ::: ddef.paramss.collect {
+                case untpd.ValDefs(vparams) => vparams
+              }.flatten.filterConserve(!_.symbol.is(Flags.Erased))
 
-        def skipContextClosures(rhs: Tree, crCount: Int)(using Context): Tree =
-          if crCount == 0 then rhs
-          else rhs match
-            case closureDef(meth) =>
-              val contextParams = meth.termParamss.head
-              for param <- contextParams do
-                if !param.symbol.is(Flags.Erased) then
-                  param.symbol.copySymDenotation(owner = sym).installAfter(erasurePhase)
-                  vparams = vparams :+ param
-              if crCount == 1 then meth.rhs.changeOwnerAfter(meth.symbol, sym, erasurePhase)
-              else skipContextClosures(meth.rhs, crCount - 1)
+          println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}")
 
-        var rhs1 = skipContextClosures(ddef.rhs.asInstanceOf[Tree], contextResultCount(sym))
+          def skipContextClosures(rhs: Tree, crCount: Int)(using Context): Tree =
+            if crCount == 0 then rhs
+            else rhs match
+              case closureDef(meth) =>
+                val contextParams = meth.termParamss.head
+                for param <- contextParams do
+                  if !param.symbol.is(Flags.Erased) then
+                    param.symbol.copySymDenotation(owner = sym).installAfter(erasurePhase)
+                    vparams = vparams :+ param
+                if crCount == 1 then meth.rhs.changeOwnerAfter(meth.symbol, sym, erasurePhase)
+                else skipContextClosures(meth.rhs, crCount - 1)
 
-        if sym.isAnonymousFunction && vparams.length > MaxImplementedFunctionArity then
-          val bunchedParam = newSymbol(sym, nme.ALLARGS, Flags.TermParam, JavaArrayType(defn.ObjectType))
-          def selector(n: Int) = ref(bunchedParam)
-            .select(defn.Array_apply)
-            .appliedTo(Literal(Constant(n)))
-          val paramDefs = vparams.zipWithIndex.map {
-            case (paramDef, idx) =>
-              assignType(untpd.cpy.ValDef(paramDef)(rhs = selector(idx)), paramDef.symbol)
-          }
-          vparams = ValDef(bunchedParam) :: Nil
-          rhs1 = Block(paramDefs, rhs1)
+          var rhs1 = skipContextClosures(ddef.rhs.asInstanceOf[Tree], contextResultCount(sym))
 
-        val ddef1 = untpd.cpy.DefDef(ddef)(
-          paramss = vparams :: Nil,
-          tpt = untpd.TypedSplice(TypeTree(restpe).withSpan(ddef.tpt.span)),
-          rhs = rhs1)
-        super.typedDefDef(ddef1, sym)
+          if sym.isAnonymousFunction && vparams.length > MaxImplementedFunctionArity then
+            val bunchedParam = newSymbol(sym, nme.ALLARGS, Flags.TermParam, JavaArrayType(defn.ObjectType))
+            def selector(n: Int) = ref(bunchedParam)
+              .select(defn.Array_apply)
+              .appliedTo(Literal(Constant(n)))
+            val paramDefs = vparams.zipWithIndex.map {
+              case (paramDef, idx) =>
+                assignType(untpd.cpy.ValDef(paramDef)(rhs = selector(idx)), paramDef.symbol)
+            }
+            vparams = ValDef(bunchedParam) :: Nil
+            rhs1 = Block(paramDefs, rhs1)
+
+          val ddef1 = untpd.cpy.DefDef(ddef)(
+            paramss = vparams :: Nil,
+            tpt = untpd.TypedSplice(TypeTree(restpe).withSpan(ddef.tpt.span)),
+            rhs = rhs1)
+          super.typedDefDef(ddef1, sym)
+        }
     end typedDefDef
 
     /** The outer parameter definition of a constructor if it needs one */
@@ -1018,6 +1033,7 @@ object Erasure {
     override def typedClosure(tree: untpd.Closure, pt: Type)(using Context): Tree = {
       val xxl = defn.isXXLFunctionClass(tree.typeOpt.typeSymbol)
       var implClosure = super.typedClosure(tree, pt).asInstanceOf[Closure]
+      println(s" ? ? typing closure $tree => ${implClosure}")
       if (xxl) implClosure = cpy.Closure(implClosure)(tpt = TypeTree(defn.FunctionXXLClass.typeRef))
       adaptClosure(implClosure)
     }
@@ -1059,7 +1075,9 @@ object Erasure {
           atPhase(erasurePhase.next)(adapt(tree, pt, locked))
         else if (tree.isEmpty) tree
         else if (ctx.mode is Mode.Pattern) tree // TODO: replace with assertion once pattern matcher is active
-        else adaptToType(tree, pt)
+        else
+          println(s"? ? ? adapting $tree to $pt")
+          adaptToType(tree, pt)
       }
 
     override def simplify(tree: Tree, pt: Type, locked: TypeVars)(using Context): tree.type = tree

@@ -393,8 +393,6 @@ object SourceCode {
           case Select(qual, "apply") =>
             if qual.tpe.isContextFunctionType then
               argsPrefix += "using "
-            if qual.tpe.isErasedFunctionType then
-              argsPrefix += "erased "
             printQualTree(fn)
           case _ => printQualTree(fn)
         }

@@ -1282,27 +1282,17 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       case _ => EmptyFlags
     }
 
-    assert(!funFlags.is(Erased) || !args.isEmpty, "An empty function cannot not be erased")
+    // assert(!funFlags.is(Erased) || !args.isEmpty, "An empty function cannot not be erased")
 
     val numArgs = args.length
     val isContextual = funFlags.is(Given)
-    val isErased = funFlags.is(Erased)
     val isImpure = funFlags.is(Impure)
-    val funSym = defn.FunctionSymbol(numArgs, isContextual, isErased, isImpure)
+    val funSym = defn.FunctionSymbol(numArgs, isContextual, isImpure)
 
     /** If `app` is a function type with arguments that are all erased classes,
      *  turn it into an erased function type.
      */
-    def propagateErased(app: Tree): Tree = app match
-      case AppliedTypeTree(tycon: TypeTree, args)
-      if !isErased
-         && numArgs > 0
-         && args.indexWhere(!_.tpe.isErasedClass) == numArgs =>
-        val tycon1 = TypeTree(defn.FunctionSymbol(numArgs, isContextual, true, isImpure).typeRef)
-          .withSpan(tycon.span)
-        assignType(cpy.AppliedTypeTree(app)(tycon1, args), tycon1, args)
-      case _ =>
-        app
+    def propagateErased(app: Tree): Tree = app // TODO erase this
 
     /** Typechecks dependent function type with given parameters `params` */
     def typedDependent(params: List[untpd.ValDef])(using Context): Tree =
@@ -1481,6 +1471,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
             desugared = cpy.Function(tree)(params1, rhs)
         case _ =>
 
+    println(s"desugaring!\n\tpt = $pt\n\ttree = $tree")
     if desugared.isEmpty then
       val inferredParams: List[untpd.ValDef] =
         for ((param, i) <- params.zipWithIndex) yield
@@ -1497,7 +1488,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                   .withType(paramType.translateFromRepeated(toArray = false))
                   .withSpan(param.span.endPos)
               )
-            cpy.ValDef(param)(tpt = paramTpt)
+            val ret = cpy.ValDef(param)(tpt = paramTpt)
+            println(s"\t\tdesugaring! ${param} => ${ret}")
+            ret
       desugared = desugar.makeClosure(inferredParams, fnBody, resultTpt, isContextual, tree.span)
 
     typed(desugared, pt)
@@ -1536,7 +1529,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                        |because it has internal parameter dependencies""")
                 else if ((tree.tpt `eq` untpd.ContextualEmptyTree) && mt.paramNames.isEmpty)
                   // Note implicitness of function in target type since there are no method parameters that indicate it.
-                  TypeTree(defn.FunctionOf(Nil, mt.resType, isContextual = true, isErased = false))
+                  TypeTree(defn.FunctionOf(Nil, mt.resType, isContextual = true))
                 else
                   EmptyTree
             }
@@ -2289,7 +2282,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     if filters == List(MessageFilter.None) then sup.markUsed()
     ctx.run.nn.suppressions.addSuppression(sup)
 
-  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = {
+  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = trace.force(s"typing val ${vdef.showSummary}", show=true){
     val ValDef(name, tpt, _) = vdef
     completeAnnotations(vdef, sym)
     if (sym.isOneOf(GivenOrImplicit)) checkImplicitConversionDefOK(sym)
@@ -2304,12 +2297,13 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     vdef1.setDefTree
   }
 
-  def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree = {
+  def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree = 
     if (!sym.info.exists) { // it's a discarded synthetic case class method, drop it
       assert(sym.is(Synthetic) && desugar.isRetractableCaseClassMethodName(sym.name))
       sym.owner.info.decls.openForMutations.unlink(sym)
       return EmptyTree
     }
+    trace.force(s"typing def ${ddef.showSummary}", show=true) {
     // TODO: - Remove this when `scala.language.experimental.erasedDefinitions` is no longer experimental.
     //       - Modify signature to `erased def erasedValue[T]: T`
     if sym.eq(defn.Compiletime_erasedValue) then
@@ -2978,7 +2972,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     tree
 
   protected def makeContextualFunction(tree: untpd.Tree, pt: Type)(using Context): Tree = {
-    val defn.FunctionOf(formals, _, true, _) = pt.dropDependentRefinement: @unchecked
+    val defn.FunctionOf(formals, _, true) = pt.dropDependentRefinement: @unchecked
 
     // The getter of default parameters may reach here.
     // Given the code below

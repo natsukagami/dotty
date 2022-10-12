@@ -235,14 +235,11 @@ object NameOps {
       isFunctionPrefix(suffixStart, mustHave) && funArity(suffixStart) >= 0
 
     def isContextFunction(using Context): Boolean = isSpecificFunction("Context")
-    def isErasedFunction(using Context): Boolean = isSpecificFunction("Erased")
     def isImpureFunction(using Context): Boolean = isSpecificFunction("Impure")
 
     /** Is a synthetic function name, i.e. one of
      *    - FunctionN for N > 22
      *    - ContextFunctionN for N >= 0
-     *    - ErasedFunctionN for N >= 0
-     *    - ErasedContextFunctionN for N >= 0
      */
     def isSyntheticFunction(using Context): Boolean =
       val suffixStart = functionSuffixStart

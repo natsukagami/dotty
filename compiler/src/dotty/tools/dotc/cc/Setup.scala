@@ -36,8 +36,7 @@ extends tpd.TreeTraverser:
    */
   private def depFun(tycon: Type, argTypes: List[Type], resType: Type)(using Context): Type =
     MethodType.companion(
-        isContextual = defn.isContextFunctionClass(tycon.classSymbol),
-        isErased = defn.isErasedFunctionClass(tycon.classSymbol)
+        isContextual = defn.isContextFunctionClass(tycon.classSymbol)
       )(argTypes, resType)
       .toFunctionType(isJava = false, alwaysDependent = true)
 
@@ -248,7 +247,7 @@ extends tpd.TreeTraverser:
   private def expandThrowsAlias(tp: Type)(using Context) = tp match
     case AppliedType(tycon, res :: exc :: Nil) if tycon.typeSymbol == defn.throwsAlias =>
       // hard-coded expansion since $throws aliases in stdlib are defined with `?=>` rather than `?->`
-      defn.FunctionOf(defn.CanThrowClass.typeRef.appliedTo(exc) :: Nil, res, isContextual = true, isErased = true)
+      defn.FunctionOf(defn.CanThrowClass.typeRef.appliedTo(exc) :: Nil, res, isContextual = true)
     case _ => tp
 
   private def expandThrowsAliases(using Context) = new TypeMap:

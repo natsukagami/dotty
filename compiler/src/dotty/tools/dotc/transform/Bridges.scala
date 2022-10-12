@@ -81,7 +81,7 @@ class Bridges(root: ClassSymbol, thisPhase: DenotTransformer)(using Context) {
       if (!member.info.matches(other.info))
         report.error(em"""bridge generated for member ${desc(member)}
                       |which overrides ${desc(other)}
-                      |clashes with definition of the member itself; both have erased type ${info(member)(using elimErasedCtx)}."""",
+                      |clashes with definition of the member itself; both have erased type ${info(member)(using elimErasedCtx)}.""",
                   bridgePosFor(member))
     }
     else if !inContext(preErasureCtx)(site.memberInfo(member).matches(site.memberInfo(other))) then
@@ -129,9 +129,9 @@ class Bridges(root: ClassSymbol, thisPhase: DenotTransformer)(using Context) {
           assert(ctx.typer.isInstanceOf[Erasure.Typer])
           ctx.typer.typed(untpd.cpy.Apply(ref)(ref, args), member.info.finalResultType)
         else
-          val defn.ContextFunctionType(argTypes, resType, isErased) = tp: @unchecked
+          val defn.ContextFunctionType(argTypes, resType) = tp: @unchecked
           val anonFun = newAnonFun(ctx.owner,
-            MethodType(if isErased then Nil else argTypes, resType),
+            MethodType(argTypes.filterConserve(!_.hasAnnotation(defn.ErasedParamAnnot)), resType),
             coord = ctx.owner.coord)
           anonFun.info = transformInfo(anonFun, anonFun.info)
 

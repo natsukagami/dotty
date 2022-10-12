@@ -432,7 +432,7 @@ class CheckCaptures extends Recheck, SymTransformer:
       block match
         case closureDef(mdef) =>
           pt.dealias match
-            case defn.FunctionOf(ptformals, _, _, _) if ptformals.forall(_.captureSet.isAlwaysEmpty) =>
+            case defn.FunctionOf(ptformals, _, _) if ptformals.forall(_.captureSet.isAlwaysEmpty) =>
               // Redo setup of the anonymous function so that formal parameters don't
               // get capture sets. This is important to avoid false widenings to `*`
               // when taking the base type of the actual closures's dependent function
@@ -664,7 +664,7 @@ class CheckCaptures extends Recheck, SymTransformer:
 
         try
           val (eargs, eres) = expected.dealias.stripCapturing match
-            case defn.FunctionOf(eargs, eres, _, _) => (eargs, eres)
+            case defn.FunctionOf(eargs, eres, _) => (eargs, eres)
             case expected: MethodType => (expected.paramInfos, expected.resType)
             case expected @ RefinedType(_, _, rinfo: MethodType) if defn.isFunctionType(expected) => (rinfo.paramInfos, rinfo.resType)
             case _ => (aargs.map(_ => WildcardType), WildcardType)

@@ -147,17 +147,16 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
     def toTextTuple(args: List[Type]): Text =
       "(" ~ argsText(args) ~ ")"
 
-    def toTextFunction(args: List[Type], isGiven: Boolean, isErased: Boolean, isPure: Boolean): Text =
+    def toTextFunction(args: List[Type], isGiven: Boolean, isPure: Boolean): Text =
       changePrec(GlobalPrec) {
         val argStr: Text =
           if args.length == 2
              && !defn.isTupleNType(args.head)
-             && !isGiven && !isErased
+             && !isGiven
           then
             atPrec(InfixPrec) { argText(args.head) }
           else
             "("
-            ~ keywordText("erased ").provided(isErased)
             ~ argsText(args.init)
             ~ ")"
         argStr ~ " " ~ arrow(isGiven, isPure) ~ " " ~ argText(args.last)
@@ -167,7 +166,6 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
       case info: MethodType =>
         changePrec(GlobalPrec) {
           "("
-          ~ keywordText("erased ").provided(info.isErasedMethod)
           ~ paramsText(info)
           ~ ") "
           ~ arrow(info.isImplicitMethod, isPure)
@@ -224,7 +222,7 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
             val tsym = tycon.typeSymbol
             if tycon.isRepeatedParam then toTextLocal(args.head) ~ "*"
             else if defn.isFunctionSymbol(tsym) then
-              toTextFunction(args, tsym.name.isContextFunction, tsym.name.isErasedFunction,
+              toTextFunction(args, tsym.name.isContextFunction, 
                 isPure = Feature.pureFunsEnabled && !tsym.name.isImpureFunction)
             else if isInfixType(tp) then
               val l :: r :: Nil = args: @unchecked
@@ -291,7 +289,6 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
         }
         "[applied to ("
         ~ keywordText("using ").provided(tp.isContextualMethod)
-        ~ keywordText("erased ").provided(tp.isErasedMethod)
         ~ argsText
         ~ ") returning "
         ~ toText(resultType)

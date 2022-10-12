@@ -259,9 +259,8 @@ object tpd extends Trees.Instance[Type] with TypedTreeInfo {
             if tp.isContextualMethod then Given
             else if tp.isImplicitMethod then Implicit
             else EmptyFlags
-          val maybeErased = if tp.isErasedMethod then Erased else EmptyFlags
 
-          def makeSym(info: Type) = newSymbol(sym, name, TermParam | maybeImplicit | maybeErased, info, coord = sym.coord)
+          def makeSym(info: Type) = newSymbol(sym, name, TermParam | maybeImplicit, info, coord = sym.coord)
 
           if isParamDependent then
             val sym = makeSym(origInfo.substParams(tp, previousParamRefs.toList))
@@ -1130,10 +1129,10 @@ object tpd extends Trees.Instance[Type] with TypedTreeInfo {
 
     def etaExpandCFT(using Context): Tree =
       def expand(target: Tree, tp: Type)(using Context): Tree = tp match
-        case defn.ContextFunctionType(argTypes, resType, isErased) =>
+        case defn.ContextFunctionType(argTypes, resType) =>
           val anonFun = newAnonFun(
             ctx.owner,
-            MethodType.companion(isContextual = true, isErased = isErased)(argTypes, resType),
+            MethodType.companion(isContextual = true)(argTypes, resType),
             coord = ctx.owner.coord)
           def lambdaBody(refss: List[List[Tree]]) =
             expand(target.select(nme.apply).appliedToArgss(refss), resType)(

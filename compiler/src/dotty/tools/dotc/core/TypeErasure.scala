@@ -15,6 +15,7 @@ import unpickleScala2.Scala2Erasure
 import Decorators._
 import Definitions.MaxImplementedFunctionArity
 import scala.annotation.tailrec
+import reporting._
 
 /** The language in which the definition being erased was written. */
 enum SourceLanguage:
@@ -535,7 +536,7 @@ object TypeErasure {
     val paramss = res.paramNamess
     assert(paramss.length == 1)
     erasure(defn.FunctionType(paramss.head.length,
-      isContextual = res.isImplicitMethod, isErased = res.isErasedMethod))
+      isContextual = res.isImplicitMethod))
 }
 
 import TypeErasure._
@@ -586,7 +587,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
    *   - For NoType or NoPrefix, the type itself.
    *   - For any other type, exception.
    */
-  private def apply(tp: Type)(using Context): Type = tp match {
+  private def apply(tp: Type)(using Context): Type = trace.force(s"type-erasing ${tp.show}", show=true) { tp match {
     case _: ErasedValueType =>
       tp
     case tp: TypeRef =>
@@ -689,7 +690,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
       tp
     case tp if (tp `eq` NoType) || (tp `eq` NoPrefix) =>
       tp
-  }
+  } }
 
   /** Widen term ref, skipping any `()` parameter of an eventual getter. Used to erase a TermRef.
    *  Since getters are introduced after erasure, one would think that erasing a TermRef

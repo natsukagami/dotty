@@ -368,7 +368,7 @@ object ProtoTypes {
 
     private def isUndefined(tp: Type): Boolean = tp match {
       case _: WildcardType => true
-      case defn.FunctionOf(args, result, _, _) => args.exists(isUndefined) || isUndefined(result)
+      case defn.FunctionOf(args, result, _) => args.exists(isUndefined) || isUndefined(result)
       case _ => false
     }
 

@@ -19,7 +19,7 @@ class LetOverApply extends MiniPhase:
   override def description: String = LetOverApply.description
 
   override def transformApply(tree: Apply)(using Context): Tree =
-    tree.fun match
+    val ret = tree.fun match
       case Select(blk @ Block(stats, expr), name) if !expr.isInstanceOf[Closure] =>
         cpy.Block(blk)(stats,
           cpy.Apply(tree)(
@@ -29,6 +29,8 @@ class LetOverApply extends MiniPhase:
           cpy.Apply(tree)(expr, tree.args))
       case _ =>
         tree
+    println(s"++ let over apply on $tree\n\ttype = ${tree.fun.tpe.widen}\n\tret = $ret\n\tret type = ${ret.asInstanceOf[Apply].fun.tpe.widen}")
+    ret
 
 end LetOverApply
 

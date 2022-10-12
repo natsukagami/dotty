@@ -41,7 +41,9 @@ class PruneErasedDefs extends MiniPhase with SymTransformer { thisTransform =>
   override def transformApply(tree: Apply)(using Context): Tree =
     val methType = tree.fun.tpe.widen.asInstanceOf[MethodType]
     if !methType.hasErasedParam then tree
-    else cpy.Apply(tree)(tree.fun, tree.args.zipWithConserve(methType.paramInfos)((arg, param) =>
+    else
+      println(s"++ applying prune to $tree\n\tfn type = $methType)")
+      cpy.Apply(tree)(tree.fun, tree.args.zipWithConserve(methType.paramInfos)((arg, param) =>
         if param.hasAnnotation(defn.ErasedParamAnnot) then trivialErasedTree(arg) else arg
       ))
 

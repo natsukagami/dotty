@@ -105,20 +105,6 @@ class Definitions {
    *        def apply(using $x0: T0, ..., $x{N_1}: T{N-1}): R
    *      }
    *
-   *  ErasedFunctionN traits follow this template:
-   *
-   *      trait ErasedFunctionN[-T0,...,-T{N-1}, +R] extends Object {
-   *        def apply(erased $x0: T0, ..., $x{N_1}: T{N-1}): R
-   *      }
-   *
-   *  ErasedContextFunctionN traits follow this template:
-   *
-   *      trait ErasedContextFunctionN[-T0,...,-T{N-1}, +R] extends Object {
-   *        def apply(using erased $x0: T0, ..., $x{N_1}: T{N-1}): R
-   *      }
-   *
-   *  ErasedFunctionN and ErasedContextFunctionN erase to Function0.
-   *
    *  ImpureXYZFunctionN follow this template:
    *
    *      type ImpureXYZFunctionN[-T0,...,-T{N-1}, +R] = {*} XYZFunctionN[T0,...,T{N-1}, R]
@@ -149,8 +135,7 @@ class Definitions {
           val resParamRef = enterTypeParam(cls, paramNamePrefix ++ "R", Covariant, decls).typeRef
           val methodType = MethodType.companion(
             isContextual = name.isContextFunction,
-            isImplicit = false,
-            isErased = name.isErasedFunction)
+            isImplicit = false)
           decls.enter(newMethod(cls, nme.apply, methodType(argParamRefs, resParamRef), Deferred))
           denot.info =
             ClassInfo(ScalaPackageClass.thisType, cls, ObjectType :: Nil, decls)
@@ -1080,14 +1065,14 @@ class Definitions {
     sym.owner.linkedClass.typeRef
 
   object FunctionOf {
-    def apply(args: List[Type], resultType: Type, isContextual: Boolean = false, isErased: Boolean = false)(using Context): Type =
-      FunctionType(args.length, isContextual, isErased).appliedTo(args ::: resultType :: Nil)
-    def unapply(ft: Type)(using Context): Option[(List[Type], Type, Boolean, Boolean)] = {
+    def apply(args: List[Type], resultType: Type, isContextual: Boolean = false)(using Context): Type =
+      FunctionType(args.length, isContextual).appliedTo(args ::: resultType :: Nil)
+    def unapply(ft: Type)(using Context): Option[(List[Type], Type, Boolean)] = {
       val tsym = ft.typeSymbol
       if isFunctionClass(tsym) && ft.isRef(tsym) then
         val targs = ft.dealias.argInfos
         if (targs.isEmpty) None
-        else Some(targs.init, targs.last, tsym.name.isContextFunction, tsym.name.isErasedFunction)
+        else Some(targs.init, targs.last, tsym.name.isContextFunction)
       else None
     }
   }
@@ -1398,24 +1383,22 @@ class Definitions {
       classRefs(n).nn
   end FunType
 
-  private def funTypeIdx(isContextual: Boolean, isErased: Boolean, isImpure: Boolean): Int =
+  private def funTypeIdx(isContextual: Boolean, isImpure: Boolean): Int =
       (if isContextual then 1 else 0)
-    + (if isErased     then 2 else 0)
-    + (if isImpure     then 4 else 0)
+    + (if isImpure     then 2 else 0)
 
   private val funTypeArray: IArray[FunType] =
-    val arr = Array.ofDim[FunType](8)
+    val arr = Array.ofDim[FunType](4)
     val choices = List(false, true)
-    for contxt <- choices; erasd <- choices; impure <- choices do
+    for contxt <- choices; impure <- choices do
       var str = "Function"
       if contxt then str = "Context" + str
-      if erasd then str = "Erased" + str
       if impure then str = "Impure" + str
-      arr(funTypeIdx(contxt, erasd, impure)) = FunType(str)
+      arr(funTypeIdx(contxt, impure)) = FunType(str)
     IArray.unsafeFromArray(arr)
 
-  def FunctionSymbol(n: Int, isContextual: Boolean = false, isErased: Boolean = false, isImpure: Boolean = false)(using Context): Symbol =
-    funTypeArray(funTypeIdx(isContextual, isErased, isImpure))(n).symbol
+  def FunctionSymbol(n: Int, isContextual: Boolean = false, isImpure: Boolean = false)(using Context): Symbol =
+    funTypeArray(funTypeIdx(isContextual, isImpure))(n).symbol
 
   @tu lazy val Function0_apply: Symbol = Function0.requiredMethod(nme.apply)
   @tu lazy val ContextFunction0_apply: Symbol = ContextFunction0.requiredMethod(nme.apply)
@@ -1425,8 +1408,8 @@ class Definitions {
   @tu lazy val Function2: Symbol = FunctionSymbol(2)
   @tu lazy val ContextFunction0: Symbol = FunctionSymbol(0, isContextual = true)
 
-  def FunctionType(n: Int, isContextual: Boolean = false, isErased: Boolean = false, isImpure: Boolean = false)(using Context): TypeRef =
-    FunctionSymbol(n, isContextual && !ctx.erasedTypes, isErased, isImpure).typeRef
+  def FunctionType(n: Int, isContextual: Boolean = false, isImpure: Boolean = false)(using Context): TypeRef =
+    FunctionSymbol(n, isContextual && !ctx.erasedTypes, isImpure).typeRef
 
   lazy val PolyFunctionClass = requiredClass("scala.PolyFunction")
   def PolyFunctionType = PolyFunctionClass.typeRef
@@ -1479,15 +1462,8 @@ class Definitions {
 
   /** Is an context function class.
    *   - ContextFunctionN for N >= 0
-   *   - ErasedContextFunctionN for N > 0
    */
   def isContextFunctionClass(cls: Symbol): Boolean = scalaClassName(cls).isContextFunction
-
-  /** Is an erased function class.
-   *   - ErasedFunctionN for N > 0
-   *   - ErasedContextFunctionN for N > 0
-   */
-  def isErasedFunctionClass(cls: Symbol): Boolean = scalaClassName(cls).isErasedFunction
 
   /** Is either FunctionXXL or  a class that will be erased to FunctionXXL
    *   - FunctionXXL
@@ -1524,8 +1500,10 @@ class Definitions {
    *    - anything else becomes a NoType
    */
   def functionTypeErasure(cls: Symbol): Type =
+    val typ = cls.info
+    println(s"erasure for $cls ($typ)")
     val arity = scalaClassName(cls).functionArity
-    if cls.name.isErasedFunction then FunctionType(0)
+    if false then FunctionType(0)
     else if arity > 22 then FunctionXXLClass.typeRef
     else if arity >= 0 then FunctionType(arity)
     else NoType
@@ -1648,7 +1626,7 @@ class Definitions {
     arity >= 0
     && isFunctionClass(sym)
     && tp.isRef(
-        FunctionType(arity, sym.name.isContextFunction, sym.name.isErasedFunction).typeSymbol,
+        FunctionType(arity, sym.name.isContextFunction).typeSymbol,
         skipRefined = false)
   end isNonRefinedFunction
 
@@ -1705,6 +1683,7 @@ class Definitions {
 
   def isSpecializableFunction(cls: ClassSymbol, paramTypes: List[Type], retType: Type)(using Context): Boolean =
     paramTypes.length <= 2
+    && !paramTypes.exists(_.isAnnotErased)
     && (cls.derivesFrom(FunctionSymbol(paramTypes.length)) || isByNameFunctionClass(cls))
     && isSpecializableFunctionSAM(paramTypes, retType)
 
@@ -1771,18 +1750,20 @@ class Definitions {
    *  types `As`, the result type `B` and a whether the type is an erased context function.
    */
   object ContextFunctionType:
-    def unapply(tp: Type)(using Context): Option[(List[Type], Type, Boolean)] =
+    def unapply(tp: Type)(using Context): Option[(List[Type], Type)] =
       if ctx.erasedTypes then
         atPhase(erasurePhase)(unapply(tp))
       else
         val tp1 = asContextFunctionType(tp)
         if tp1.exists then
           val args = tp1.dropDependentRefinement.argInfos
-          Some((args.init, args.last, tp1.typeSymbol.name.isErasedFunction))
+          Some((args.init, args.last))
         else None
 
   def isErasedFunctionType(tp: Type)(using Context): Boolean =
-    tp.dealias.typeSymbol.name.isErasedFunction && isFunctionType(tp)
+    println(s"isErasedFunctionType for $tp")
+    ??? // TODO
+    // tp.dealias.typeSymbol.name.isErasedFunction && isFunctionType(tp)
 
   /** A whitelist of Scala-2 classes that are known to be pure */
   def isAssuredNoInits(sym: Symbol): Boolean =

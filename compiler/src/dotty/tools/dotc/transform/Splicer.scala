@@ -316,9 +316,8 @@ object Splicer {
         view.toList
 
       fnType.dealias match
-        case fnType: MethodType if fnType.isErasedMethod => interpretArgs(argss, fnType.resType)
         case fnType: MethodType =>
-          val argTypes = fnType.paramInfos
+          val argTypes = fnType.paramInfos.filterConserve(!_.isAnnotErased)
           assert(argss.head.size == argTypes.size)
           interpretArgsGroup(argss.head, argTypes) ::: interpretArgs(argss.tail, fnType.resType)
         case fnType: AppliedType if defn.isContextFunctionType(fnType) =>
@@ -558,8 +557,9 @@ object Splicer {
         case fn: Ident => Some((tpd.desugarIdent(fn).withSpan(fn.span), Nil))
         case fn: Select => Some((fn, Nil))
         case Apply(f @ Call0(fn, args1), args2) =>
-          if (f.tpe.widenDealias.isErasedMethod) Some((fn, args1))
-          else Some((fn, args2 :: args1))
+          val methType = f.tpe.widenDealias.asInstanceOf[MethodType]
+          val args = args2.zip(methType.paramInfos).flatMap((arg, param) => if param.isAnnotErased then None else Some(arg))
+          Some((fn, args :: args1))
         case TypeApply(Call0(fn, args), _) => Some((fn, args))
         case _ => None
       }

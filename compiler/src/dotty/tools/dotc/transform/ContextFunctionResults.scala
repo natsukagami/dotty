@@ -20,7 +20,7 @@ object ContextFunctionResults:
    */
   def annotateContextResults(mdef: DefDef)(using Context): Unit =
     def contextResultCount(rhs: Tree, tp: Type): Int = tp match
-      case defn.ContextFunctionType(_, resTpe, _) =>
+      case defn.ContextFunctionType(_, resTpe) =>
         rhs match
           case closureDef(meth) => 1 + contextResultCount(meth.rhs, resTpe)
           case _ => 0
@@ -57,8 +57,9 @@ object ContextFunctionResults:
    *  type are erased.
    */
   def contextResultsAreErased(sym: Symbol)(using Context): Boolean =
+    // Assume that we have the type of the denote here.
     def allErased(tp: Type): Boolean = tp.dealias match
-      case defn.ContextFunctionType(_, resTpe, isErased) => isErased && allErased(resTpe)
+      case defn.ContextFunctionType(args, resTpe) => args.forall(_.isAnnotErased) && allErased(resTpe)
       case _ => true
     contextResultCount(sym) > 0 && allErased(sym.info.finalResultType)
 
@@ -72,10 +73,8 @@ object ContextFunctionResults:
         integrateContextResults(rt, crCount)
       case tp: MethodOrPoly =>
         tp.derivedLambdaType(resType = integrateContextResults(tp.resType, crCount))
-      case defn.ContextFunctionType(argTypes, resType, isErased) =>
-        val methodType: MethodTypeCompanion =
-          if isErased then ErasedMethodType else MethodType
-        methodType(argTypes, integrateContextResults(resType, crCount - 1))
+      case defn.ContextFunctionType(argTypes, resType) =>
+        MethodType(argTypes, integrateContextResults(resType, crCount - 1))
 
   /** The total number of parameters of method `sym`, not counting
    *  erased parameters, but including context result parameters.
@@ -85,14 +84,14 @@ object ContextFunctionResults:
     def contextParamCount(tp: Type, crCount: Int): Int =
       if crCount == 0 then 0
       else
-        val defn.ContextFunctionType(params, resTpe, isErased) = tp: @unchecked
+        val defn.ContextFunctionType(params, resTpe) = tp: @unchecked
         val rest = contextParamCount(resTpe, crCount - 1)
-        if isErased then rest else params.length + rest
+        params.count(!_.isAnnotErased) + rest
 
     def normalParamCount(tp: Type): Int = tp.widenExpr.stripPoly match
-      case mt @ MethodType(pnames) =>
+      case mt: MethodType =>
         val rest = normalParamCount(mt.resType)
-        if mt.isErasedMethod then rest else pnames.length + rest
+        mt.paramInfos.count(!_.isAnnotErased) + rest
       case _ => contextParamCount(tp, contextResultCount(sym))
 
     normalParamCount(sym.info)
@@ -103,7 +102,7 @@ object ContextFunctionResults:
     def recur(tp: Type, n: Int): Type =
       if n == 0 then tp
       else tp match
-        case defn.ContextFunctionType(_, resTpe, _) => recur(resTpe, n - 1)
+        case defn.ContextFunctionType(_, resTpe) => recur(resTpe, n - 1)
     recur(meth.info.finalResultType, depth)
 
   /** Should selection `tree` be eliminated since it refers to an `apply`
