@@ -2282,7 +2282,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     if filters == List(MessageFilter.None) then sup.markUsed()
     ctx.run.nn.suppressions.addSuppression(sup)
 
-  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = trace.force(s"typing val ${vdef.showSummary}", show=true){
+  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = trace.force(s"typing val ${vdef.show}", show=true){
     val ValDef(name, tpt, _) = vdef
     completeAnnotations(vdef, sym)
     if (sym.isOneOf(GivenOrImplicit)) checkImplicitConversionDefOK(sym)
@@ -2303,7 +2303,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       sym.owner.info.decls.openForMutations.unlink(sym)
       return EmptyTree
     }
-    trace.force(s"typing def ${ddef.showSummary}", show=true) {
+    trace.force(s"typing def ${ddef.show}", show=true) {
     // TODO: - Remove this when `scala.language.experimental.erasedDefinitions` is no longer experimental.
     //       - Modify signature to `erased def erasedValue[T]: T`
     if sym.eq(defn.Compiletime_erasedValue) then
@@ -2323,6 +2323,8 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     val tparamss = paramss1.collect {
       case untpd.TypeDefs(tparams) => tparams
     }
+
+    println(s" | | def tpt = ${tpt.show}\n\t => ${tpt1.tpe.widenExpr}")
 
     // Register GADT constraint for class type parameters from outer to inner class definition. (Useful when nested classes exist.) But do not cross a function definition.
     if sym.flags.is(Method) then

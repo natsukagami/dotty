@@ -36,6 +36,7 @@ import core.Mode
 import util.Property
 import reporting._
 import reporting.trace.force as trace
+import dotty.tools.dotc.ast.untpd.Mod.Erased
 
 class Erasure extends Phase with DenotTransformer {
 
@@ -332,6 +333,11 @@ object Erasure {
      *  in ExtensionMethods#transform.
      */
     def cast(tree: Tree, pt: Type)(using Context): Tree = trace(i"cast ${tree.tpe.widen} --> $pt", show = true) {
+      def callStack = try { throw Exception("exception") } catch { case ex => ex.getStackTrace drop 2 }
+
+      def printStackTrace = callStack drop 1 /* don't print ourselves! */ foreach println
+
+      printStackTrace
       def wrap(tycon: TypeRef) =
         ref(u2evt(tycon.typeSymbol.asClass)).appliedTo(tree)
       def unwrap(tycon: TypeRef) =
@@ -383,7 +389,7 @@ object Erasure {
      *    e -> unbox(e, PT)  if `PT` is a primitive type and `e` is not of primitive type
      *    e -> cast(e, PT)   otherwise
      */
-    def adaptToType(tree: Tree, pt: Type)(using Context): Tree = pt match
+    def adaptToType(tree: Tree, pt: Type)(using Context): Tree = trace(s"adapting tree ${tree.show} to ${pt.show}", show = true) { pt match
       case _: FunProto | AnyFunctionProto => tree
       case _ => tree.tpe.widen match
         case mt: MethodType if tree.isTerm =>
@@ -405,7 +411,7 @@ object Erasure {
             adaptToType(unbox(tree, pt), pt)
           else
             cast(tree, pt)
-    end adaptToType
+    }
 
     /** The following code:
      *
@@ -702,6 +708,7 @@ object Erasure {
 
       val owner = mapOwner(origSym)
       var sym = if (owner eq origSym.maybeOwner) origSym else owner.info.decl(tree.name).symbol
+      println(s" typedSelect with $tree\n\t$pt\n\t$origSym\n\t$owner")
       if !sym.exists then
         // We fail the sym.exists test for pos/i15158.scala, where we pass an infinitely
         // recurring match type to an overloaded constructor. An equivalent test
@@ -777,6 +784,7 @@ object Erasure {
             val castTarget = // Avoid inaccessible cast targets, see i8661
               if isJvmAccessible(sym.owner)
               then
+                println(s"jvm accessible ${sym.owner}\n\tterm = $sym\n\twith ${sym.owner.typeRef}")
                 sym.owner.typeRef
               else
                 // If the owner is inaccessible, try going through the qualifier,
@@ -913,7 +921,7 @@ object Erasure {
      *  parameter of type `[]Object`.
      */
     override def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
-      trace(i"typing ${ddef.showSummary()}", show = true) {
+      trace(i"typing ${ddef.show}", show = true) {
         if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
           erasedDef(sym)
         else
@@ -924,7 +932,7 @@ object Erasure {
                 case untpd.ValDefs(vparams) => vparams
               }.flatten.filterConserve(!_.symbol.is(Flags.Erased))
 
-          println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}")
+          println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}\n\t$restpe\n\t$sym\n\t${sym.info}")
 
           def skipContextClosures(rhs: Tree, crCount: Int)(using Context): Tree =
             if crCount == 0 then rhs
@@ -1068,7 +1076,7 @@ object Erasure {
     override def typedImport(tree: untpd.Import)(using Context) = EmptyTree
 
     override def adapt(tree: Tree, pt: Type, locked: TypeVars)(using Context): Tree =
-      trace(i"adapting ${tree.showSummary()}: ${tree.tpe} to $pt", show = true) {
+      trace(i"adapting ${tree.showSummary()}: ${tree.tpe} to $pt") {
         if ctx.phase != erasurePhase && ctx.phase != erasurePhase.next then
           // this can happen when reading annotations loaded during erasure,
           // since these are loaded at phase typer.
@@ -1076,7 +1084,7 @@ object Erasure {
         else if (tree.isEmpty) tree
         else if (ctx.mode is Mode.Pattern) tree // TODO: replace with assertion once pattern matcher is active
         else
-          println(s"? ? ? adapting $tree to $pt")
+          println(s"? ? ? adapting $tree to ${pt.show}")
           adaptToType(tree, pt)
       }
 

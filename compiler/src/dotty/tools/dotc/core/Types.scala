@@ -4348,6 +4348,13 @@ object Types {
     override def translucentSuperType(using Context): Type = tycon match {
       case tycon: TypeRef if tycon.symbol.isOpaqueAlias =>
         tycon.translucentSuperType.applyIfParameterized(args)
+      case tycon: TypeRef if defn.isFunctionSymbol(tycon.symbol) =>
+        // ??? fill it with another function class
+        val argsCount = args.dropRight(1).count(!_.isAnnotErased)
+        println(s"translucentSuperType of $tycon")
+        for (arg <- args)
+          println(s"\n\t$arg <- ${arg.isAnnotErased}")
+        defn.FunctionType(argsCount)
       case _ =>
         tryNormalize.orElse(superType)
     }

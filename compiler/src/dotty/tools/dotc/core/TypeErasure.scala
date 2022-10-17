@@ -228,7 +228,7 @@ object TypeErasure {
    *
    *   `sourceLanguage`, `isConstructor` and `semiEraseVCs` are set based on the symbol.
    */
-  def transformInfo(sym: Symbol, tp: Type)(using Context): Type = {
+  def transformInfo(sym: Symbol, tp: Type)(using Context): Type = trace.force(s"transformInfo $sym ($tp)") {
     val sourceLanguage = SourceLanguage(sym)
     val semiEraseVCs = !sourceLanguage.isJava // Java sees our value classes as regular classes.
     val erase = erasureFn(sourceLanguage, semiEraseVCs, sym.isConstructor, isSymbol = true, wildcardOK = false)
@@ -587,7 +587,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
    *   - For NoType or NoPrefix, the type itself.
    *   - For any other type, exception.
    */
-  private def apply(tp: Type)(using Context): Type = trace.force(s"type-erasing ${tp.show}", show=true) { tp match {
+  private def apply(tp: Type)(using Context): Type = trace.force(s"type-erasing ${tp}", show=false) { tp match {
     case _: ErasedValueType =>
       tp
     case tp: TypeRef =>
@@ -641,7 +641,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
         erasureFn(sourceLanguage, semiEraseVCs, isConstructor, isSymbol, wildcardOK)(tpToErase)
       val (names, formals0) = if !tp.hasErasedParam
         then (tp.paramNames, tp.paramInfos)
-        else tp.paramNames.zip(tp.paramInfos).filter((_, info) => !info.hasAnnotation(defn.ErasedParamAnnot)).unzip
+        else tp.paramNames.zip(tp.paramInfos).filter(_(1).isAnnotErased).unzip
       val formals = formals0.mapConserve(paramErasure)
       eraseResult(tp.resultType) match {
         case rt: MethodType =>
@@ -789,7 +789,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
   }
 
   /** The erasure of a function result type. */
-  def eraseResult(tp: Type)(using Context): Type =
+  def eraseResult(tp: Type)(using Context): Type = trace.force(s"erase result for $tp") {
     // For a value class V, "new V(x)" should have type V for type adaptation to work
     // correctly (see SIP-15 and [[Erasure.Boxing.adaptToType]]), so the result type of a
     // constructor method should not be semi-erased.
@@ -802,10 +802,12 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
         else this(tp)
       case tp: AppliedType =>
         val sym = tp.tycon.typeSymbol
-        if (sym.isClass && !erasureDependsOnArgs(sym)) eraseResult(tp.tycon)
+        if defn.isFunctionSymbol(sym) then this(tp)
+        else if (sym.isClass && !erasureDependsOnArgs(sym)) eraseResult(tp.tycon)
         else this(tp)
       case _ =>
         this(tp)
+  }
 
   /** The name of the type as it is used in `Signature`s.
    *  Need to ensure correspondence with erasure!
