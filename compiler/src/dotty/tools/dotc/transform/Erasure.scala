@@ -35,7 +35,6 @@ import ExplicitOuter._
 import core.Mode
 import util.Property
 import reporting._
-import reporting.trace.force as trace
 import dotty.tools.dotc.ast.untpd.Mod.Erased
 
 class Erasure extends Phase with DenotTransformer {
@@ -332,12 +331,9 @@ object Erasure {
      *  Casts from and to ErasedValueType are special, see the explanation
      *  in ExtensionMethods#transform.
      */
-    def cast(tree: Tree, pt: Type)(using Context): Tree = trace(i"cast ${tree.tpe.widen} --> $pt", show = true) {
+    def cast(tree: Tree, pt: Type)(using Context): Tree = trace.force(i"cast ${tree.tpe.widen} --> $pt", show = true) {
       def callStack = try { throw Exception("exception") } catch { case ex => ex.getStackTrace drop 2 }
 
-      def printStackTrace = callStack drop 1 /* don't print ourselves! */ foreach println
-
-      printStackTrace
       def wrap(tycon: TypeRef) =
         ref(u2evt(tycon.typeSymbol.asClass)).appliedTo(tree)
       def unwrap(tycon: TypeRef) =
@@ -389,7 +385,7 @@ object Erasure {
      *    e -> unbox(e, PT)  if `PT` is a primitive type and `e` is not of primitive type
      *    e -> cast(e, PT)   otherwise
      */
-    def adaptToType(tree: Tree, pt: Type)(using Context): Tree = trace(s"adapting tree ${tree.show} to ${pt.show}", show = true) { pt match
+    def adaptToType(tree: Tree, pt: Type)(using Context): Tree = trace.force(s"adapting tree ${tree.show} to ${pt.show}", show = true) { pt match
       case _: FunProto | AnyFunctionProto => tree
       case _ => tree.tpe.widen match
         case mt: MethodType if tree.isTerm =>
@@ -544,7 +540,7 @@ object Erasure {
           targetType = functionalInterface).withSpan(tree.span)
       else
         tree
-      println(s" ? adapt closure $tree\n\t$implType\n\t$sam\n\t=> $ret")
+      // println(s" ? adapt closure $tree\n\t$implType\n\t$sam\n\t=> $ret")
       ret
     end adaptClosure
   end Boxing
@@ -671,7 +667,11 @@ object Erasure {
      *      e.clone -> e.clone'         where clone' is Object's clone method
      *      e.m -> e.[]m                if `m` is an array operation other than `clone`.
      */
-    override def typedSelect(tree: untpd.Select, pt: Type)(using Context): Tree = {
+    override def typedSelect(tree: untpd.Select, pt: Type)(using Context): Tree = trace.force(s"typed select ${tree.show} (${pt.show})") {
+      _typedSelect(tree, pt)
+    }
+
+    def _typedSelect(tree: untpd.Select, pt: Type)(using Context): Tree = {
       if tree.name == nme.apply && integrateSelect(tree) then
       	return typed(tree.qualifier, pt)
 
@@ -699,6 +699,7 @@ object Erasure {
           else if defn.isSyntheticFunctionClass(owner) then
             defn.functionTypeErasure(owner).typeSymbol
           else
+            println(s"gotome $owner\n\t${owner.typeRef}\n\t${sym} ${tree.show} ${qual1.tpe}")
             owner
 
       val origSym = tree.symbol
@@ -708,7 +709,7 @@ object Erasure {
 
       val owner = mapOwner(origSym)
       var sym = if (owner eq origSym.maybeOwner) origSym else owner.info.decl(tree.name).symbol
-      println(s" typedSelect with $tree\n\t$pt\n\t$origSym\n\t$owner")
+      // println(s" typedSelect with $tree\n\t$pt\n\t$origSym\n\t$owner")
       if !sym.exists then
         // We fail the sym.exists test for pos/i15158.scala, where we pass an infinitely
         // recurring match type to an overloaded constructor. An equivalent test
@@ -778,14 +779,12 @@ object Erasure {
           selectArrayMember(qual, originalQual)
         else {
           val qual1 = adaptIfSuper(qual)
-          if (qual1.tpe.derivesFrom(sym.owner) || qual1.isInstanceOf[Super])
+          if (qual1.tpe.derivesFrom(sym.owner) || qual1.isInstanceOf[Super] || defn.isFunctionSymbol(sym.owner))
             select(qual1, sym)
           else
             val castTarget = // Avoid inaccessible cast targets, see i8661
               if isJvmAccessible(sym.owner)
-              then
-                println(s"jvm accessible ${sym.owner}\n\tterm = $sym\n\twith ${sym.owner.typeRef}")
-                sym.owner.typeRef
+              then sym.owner.typeRef
               else
                 // If the owner is inaccessible, try going through the qualifier,
                 // but be careful to not go in an infinite loop in case that doesn't
@@ -846,7 +845,7 @@ object Erasure {
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match
         case mt: MethodType =>
-          println(s"> $fun1\n\twidened to = $mt\n\toriginal = $origFunType\n\toriginal widen = ${origFun.tpe.widen}")
+          // println(s"> $fun1\n\twidened to = $mt\n\toriginal = $origFunType\n\toriginal widen = ${origFun.tpe.widen}")
           val (xmt,        // A method type like `mt` but with bunched arguments expanded to individual ones
                 bunchArgs,  // whether arguments are bunched
                 outers) =   // the outer reference parameter(s)
@@ -921,7 +920,7 @@ object Erasure {
      *  parameter of type `[]Object`.
      */
     override def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
-      trace(i"typing ${ddef.show}", show = true) {
+      trace.force(i"typing def ${ddef.show}", show = true) {
         if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
           erasedDef(sym)
         else
@@ -932,7 +931,7 @@ object Erasure {
                 case untpd.ValDefs(vparams) => vparams
               }.flatten.filterConserve(!_.symbol.is(Flags.Erased))
 
-          println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}\n\t$restpe\n\t$sym\n\t${sym.info}")
+          // println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}\n\t$restpe\n\t$sym\n\t${sym.info}")
 
           def skipContextClosures(rhs: Tree, crCount: Int)(using Context): Tree =
             if crCount == 0 then rhs
@@ -1041,7 +1040,7 @@ object Erasure {
     override def typedClosure(tree: untpd.Closure, pt: Type)(using Context): Tree = {
       val xxl = defn.isXXLFunctionClass(tree.typeOpt.typeSymbol)
       var implClosure = super.typedClosure(tree, pt).asInstanceOf[Closure]
-      println(s" ? ? typing closure $tree => ${implClosure}")
+      // println(s" ? ? typing closure $tree => ${implClosure}")
       if (xxl) implClosure = cpy.Closure(implClosure)(tpt = TypeTree(defn.FunctionXXLClass.typeRef))
       adaptClosure(implClosure)
     }
@@ -1076,7 +1075,7 @@ object Erasure {
     override def typedImport(tree: untpd.Import)(using Context) = EmptyTree
 
     override def adapt(tree: Tree, pt: Type, locked: TypeVars)(using Context): Tree =
-      trace(i"adapting ${tree.showSummary()}: ${tree.tpe} to $pt") {
+      trace.force(i"adapting ${tree.showSummary()}: ${tree.tpe} to $pt") {
         if ctx.phase != erasurePhase && ctx.phase != erasurePhase.next then
           // this can happen when reading annotations loaded during erasure,
           // since these are loaded at phase typer.
