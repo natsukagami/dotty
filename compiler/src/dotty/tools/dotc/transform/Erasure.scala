@@ -667,7 +667,7 @@ object Erasure {
      *      e.clone -> e.clone'         where clone' is Object's clone method
      *      e.m -> e.[]m                if `m` is an array operation other than `clone`.
      */
-    override def typedSelect(tree: untpd.Select, pt: Type)(using Context): Tree = trace.force(s"typed select ${tree.show} (${pt.show})") {
+    override def typedSelect(tree: untpd.Select, pt: Type)(using Context): Tree = trace.force(s"typed select ${tree.show} (${pt.show})", show = true) {
       _typedSelect(tree, pt)
     }
 
@@ -798,7 +798,9 @@ object Erasure {
         }
       }
 
-      checkNotErased(recur(qual1))
+      val ret = checkNotErased(recur(qual1))
+      println(s" ! returning ${ret.tpe}")
+      ret
     }
 
     override def typedThis(tree: untpd.This)(using Context): Tree =
@@ -845,7 +847,6 @@ object Erasure {
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match
         case mt: MethodType =>
-          // println(s"> $fun1\n\twidened to = $mt\n\toriginal = $origFunType\n\toriginal widen = ${origFun.tpe.widen}")
           val (xmt,        // A method type like `mt` but with bunched arguments expanded to individual ones
                 bunchArgs,  // whether arguments are bunched
                 outers) =   // the outer reference parameter(s)
@@ -854,6 +855,8 @@ object Erasure {
             else
               val xmt = expandedMethodType(mt, origFun)
               (xmt, xmt ne mt, outer.args(origFun))
+
+          println(s"> $fun1 (${fun1.tpe})\n\twidened to = $xmt\n\toriginal = $origFunType\n\toriginal widen = ${origFun.tpe.widen}")
 
           val args0 = outers ::: ownArgs
           val args1 = args0.zipWithConserve(xmt.paramInfos)(typedExpr)
