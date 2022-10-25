@@ -587,7 +587,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
    *   - For NoType or NoPrefix, the type itself.
    *   - For any other type, exception.
    */
-  private def apply(tp: Type)(using Context): Type = tp match {
+  private def apply(tp: Type)(using Context): Type = trace.force(s"type erasure with $tp") { tp match {
     case _: ErasedValueType =>
       tp
     case tp: TypeRef =>
@@ -641,7 +641,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
         erasureFn(sourceLanguage, semiEraseVCs, isConstructor, isSymbol, wildcardOK)(tpToErase)
       val (names, formals0) = if !tp.hasErasedParam
         then (tp.paramNames, tp.paramInfos)
-        else tp.paramNames.zip(tp.paramInfos).filter(_(1).isAnnotErased).unzip
+        else tp.paramNames.zip(tp.paramInfos).filter(!_(1).isAnnotErased).unzip
       val formals = formals0.mapConserve(paramErasure)
       eraseResult(tp.resultType) match {
         case rt: MethodType =>
@@ -690,7 +690,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
       tp
     case tp if (tp `eq` NoType) || (tp `eq` NoPrefix) =>
       tp
-  }
+  } }
 
   /** Widen term ref, skipping any `()` parameter of an eventual getter. Used to erase a TermRef.
    *  Since getters are introduced after erasure, one would think that erasing a TermRef

@@ -1330,7 +1330,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     }
   }
 
-  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = {
+  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = trace.force(s"typed function value $tree", show = true) {
     val untpd.Function(params: List[untpd.ValDef] @unchecked, _) = tree: @unchecked
 
     val isContextual = tree match {
@@ -1489,7 +1489,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                   .withSpan(param.span.endPos)
               )
             val ret = cpy.ValDef(param)(tpt = paramTpt)
-            println(s"\t\tdesugaring! ${param} => ${ret}")
+            if paramType.isAnnotErased then
+              ret.symbol.setFlag(Erased)
+            println(s"\t\tdesugaring! ${param} => ${ret} (${paramType.isAnnotErased} ${ret.symbol.is(Flags.Erased)})")
             ret
       desugared = desugar.makeClosure(inferredParams, fnBody, resultTpt, isContextual, tree.span)
 
@@ -2303,7 +2305,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       sym.owner.info.decls.openForMutations.unlink(sym)
       return EmptyTree
     }
-    trace.force(s"typing def ${ddef.show}", show=true) {
+    trace.force(s"typing def ${ddef.show} (${ddef.sourcePos.show}) ${ddef.paramss}", show=true) {
     // TODO: - Remove this when `scala.language.experimental.erasedDefinitions` is no longer experimental.
     //       - Modify signature to `erased def erasedValue[T]: T`
     if sym.eq(defn.Compiletime_erasedValue) then

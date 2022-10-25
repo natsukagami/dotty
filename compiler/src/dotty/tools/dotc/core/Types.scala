@@ -1218,10 +1218,9 @@ object Types {
      *  def o: Outer
      *  <o.x.type>.widen = o.C
      */
-    final def widen(using Context): Type = trace.force(s"widening ${this}") { this match
+    final def widen(using Context): Type = this match
       case _: TypeRef | _: MethodOrPoly => this // fast path for most frequent cases
       case tp: TermRef => // fast path for next most frequent case
-        println(s"termRef with denot ${tp.denot} (${tp.denot.symbol} ${tp.denot.symbol.owner})")
         if tp.isOverloaded then tp else tp.underlying.widen
       case tp: SingletonType => tp.underlying.widen
       case tp: ExprType => tp.resultType.widen
@@ -1230,7 +1229,7 @@ object Types {
         if tp1 eq tp then tp
         else
           val tp2 = tp1.widen
-          if tp2 ne tp1 then tp2 else tp }
+          if tp2 ne tp1 then tp2 else tp 
 
     /** Widen from singleton type to its underlying non-singleton
      *  base type by applying one or more `underlying` dereferences.

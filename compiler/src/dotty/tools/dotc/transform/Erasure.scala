@@ -699,8 +699,12 @@ object Erasure {
           else if defn.isSyntheticFunctionClass(owner) then
             defn.functionTypeErasure(owner).typeSymbol
           else
-            println(s"gotome $owner\n\t${owner.typeRef}\n\t${sym} ${tree.show} ${qual1.tpe}")
-            owner
+            val qualT = tree.qualifier.asInstanceOf[Tree].tpe.widen(using preErasureCtx)
+            if defn.isFunctionClass(owner) then
+              val argsCount = qualT.asInstanceOf[AppliedType].args.dropRight(1).count(!_.isAnnotErased)
+              defn.FunctionType(argsCount).typeSymbol
+            else
+              owner
 
       val origSym = tree.symbol
 
@@ -923,7 +927,8 @@ object Erasure {
      *  parameter of type `[]Object`.
      */
     override def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
-      trace.force(i"typing def ${ddef.show}", show = true) {
+      trace.force(i"typing def (in erasure) ${ddef.show} ${ddef.asInstanceOf[DefDef].tpe.widen(using preErasureCtx)}", show = true) {
+        def paramIsErased(p: untpd.ValDef) = p.asInstanceOf[ValDef].tpe.widen(using preErasureCtx).isAnnotErased
         if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
           erasedDef(sym)
         else
@@ -932,9 +937,7 @@ object Erasure {
           var vparams = outerParamDefs(sym)
               ::: ddef.paramss.collect {
                 case untpd.ValDefs(vparams) => vparams
-              }.flatten.filterConserve(!_.symbol.is(Flags.Erased))
-
-          // println(s"& typing defdef $ddef\n\t${vparams.map(_.denot)}\n\t$restpe\n\t$sym\n\t${sym.info}")
+              }.flatten.filterConserve(!paramIsErased(_))
 
           def skipContextClosures(rhs: Tree, crCount: Int)(using Context): Tree =
             if crCount == 0 then rhs
@@ -942,7 +945,7 @@ object Erasure {
               case closureDef(meth) =>
                 val contextParams = meth.termParamss.head
                 for param <- contextParams do
-                  if !param.symbol.is(Flags.Erased) then
+                  if !paramIsErased(param) then
                     param.symbol.copySymDenotation(owner = sym).installAfter(erasurePhase)
                     vparams = vparams :+ param
                 if crCount == 1 then meth.rhs.changeOwnerAfter(meth.symbol, sym, erasurePhase)
