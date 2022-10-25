@@ -1331,7 +1331,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     }
   }
 
-  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = trace.force(s"typed function value $tree", show = true) {
+  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = 
     val untpd.Function(params: List[untpd.ValDef] @unchecked, _) = tree: @unchecked
 
     val isContextual = tree match {
@@ -1472,7 +1472,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
             desugared = cpy.Function(tree)(params1, rhs)
         case _ =>
 
-    println(s"desugaring!\n\tpt = $pt\n\ttree = $tree")
     if desugared.isEmpty then
       val inferredParams: List[untpd.ValDef] =
         for ((param, i) <- params.zipWithIndex) yield
@@ -1489,16 +1488,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                   .withType(paramType.translateFromRepeated(toArray = false))
                   .withSpan(param.span.endPos)
               )
-            var ret = cpy.ValDef(param)(tpt = paramTpt)
+            val ret = cpy.ValDef(param)(tpt = paramTpt)
             if paramType.isAnnotErased then
               ret.symbol.setFlag(Flags.Erased)
-            println(s"\t\tdesugaring! ${param} => ${ret} (${paramType.isAnnotErased} ${ret.symbol.is(Flags.Erased)})")
             ret
       desugared = desugar.makeClosure(inferredParams, fnBody, resultTpt, isContextual, tree.span)
 
     typed(desugared, pt)
       .showing(i"desugared fun $tree --> $desugared with pt = $pt", typr)
-  }
 
   def typedClosure(tree: untpd.Closure, pt: Type)(using Context): Tree = {
     val env1 = tree.env mapconserve (typed(_))
@@ -2285,7 +2282,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     if filters == List(MessageFilter.None) then sup.markUsed()
     ctx.run.nn.suppressions.addSuppression(sup)
 
-  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = trace.force(s"typing val ${vdef.show}", show=true){
+  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = 
     val ValDef(name, tpt, _) = vdef
     completeAnnotations(vdef, sym)
     if (sym.isOneOf(GivenOrImplicit)) checkImplicitConversionDefOK(sym)
@@ -2298,7 +2295,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     val vdef1 = assignType(cpy.ValDef(vdef)(name, tpt1, rhs1), sym)
     postProcessInfo(sym)
     vdef1.setDefTree
-  }
 
   def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree = 
     if (!sym.info.exists) { // it's a discarded synthetic case class method, drop it
@@ -2306,7 +2302,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       sym.owner.info.decls.openForMutations.unlink(sym)
       return EmptyTree
     }
-    trace.force(s"typing def ${ddef.show} (${ddef.sourcePos.show}) ${ddef.paramss.nestedMap(p => (p, p.mods))}", show=true) {
     // TODO: - Remove this when `scala.language.experimental.erasedDefinitions` is no longer experimental.
     //       - Modify signature to `erased def erasedValue[T]: T`
     if sym.eq(defn.Compiletime_erasedValue) then
@@ -2326,8 +2321,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     val tparamss = paramss1.collect {
       case untpd.TypeDefs(tparams) => tparams
     }
-
-    println(s" | | def tpt = ${tpt.show}\n\t => ${tpt1.tpe.widenExpr}")
 
     // Register GADT constraint for class type parameters from outer to inner class definition. (Useful when nested classes exist.) But do not cross a function definition.
     if sym.flags.is(Method) then
@@ -2401,7 +2394,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     postProcessInfo(sym)
     ddef2.setDefTree
       //todo: make sure dependent method types do not depend on implicits or by-name params
-  }
 
   /** (1) Check that the signature of the class member does not return a repeated parameter type
    *  (2) If info is an erased class, set erased flag of member

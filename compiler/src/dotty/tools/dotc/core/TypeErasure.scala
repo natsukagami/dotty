@@ -228,7 +228,7 @@ object TypeErasure {
    *
    *   `sourceLanguage`, `isConstructor` and `semiEraseVCs` are set based on the symbol.
    */
-  def transformInfo(sym: Symbol, tp: Type)(using Context): Type = trace.force(s"transformInfo $sym ($tp)") {
+  def transformInfo(sym: Symbol, tp: Type)(using Context): Type = 
     val sourceLanguage = SourceLanguage(sym)
     val semiEraseVCs = !sourceLanguage.isJava // Java sees our value classes as regular classes.
     val erase = erasureFn(sourceLanguage, semiEraseVCs, sym.isConstructor, isSymbol = true, wildcardOK = false)
@@ -269,7 +269,6 @@ object TypeErasure {
         else
           einfo
     }
-  }
 
   /** Is `Array[tp]` a generic Array that needs to be erased to `Object`?
    *  This is true if among the subtypes of `Array[tp]` there is either:
@@ -587,7 +586,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
    *   - For NoType or NoPrefix, the type itself.
    *   - For any other type, exception.
    */
-  private def apply(tp: Type)(using Context): Type = trace.force(s"type erasure with $tp") { tp match {
+  private def apply(tp: Type)(using Context): Type = tp match {
     case _: ErasedValueType =>
       tp
     case tp: TypeRef =>
@@ -690,7 +689,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
       tp
     case tp if (tp `eq` NoType) || (tp `eq` NoPrefix) =>
       tp
-  } }
+  }
 
   /** Widen term ref, skipping any `()` parameter of an eventual getter. Used to erase a TermRef.
    *  Since getters are introduced after erasure, one would think that erasing a TermRef
@@ -789,7 +788,7 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
   }
 
   /** The erasure of a function result type. */
-  def eraseResult(tp: Type)(using Context): Type = trace.force(s"erase result for $tp") {
+  def eraseResult(tp: Type)(using Context): Type =
     // For a value class V, "new V(x)" should have type V for type adaptation to work
     // correctly (see SIP-15 and [[Erasure.Boxing.adaptToType]]), so the result type of a
     // constructor method should not be semi-erased.
@@ -807,7 +806,6 @@ class TypeErasure(sourceLanguage: SourceLanguage, semiEraseVCs: Boolean, isConst
         else this(tp)
       case _ =>
         this(tp)
-  }
 
   /** The name of the type as it is used in `Signature`s.
    *  Need to ensure correspondence with erasure!

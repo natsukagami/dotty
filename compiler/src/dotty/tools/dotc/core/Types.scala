@@ -4351,9 +4351,6 @@ object Types {
       case tycon: TypeRef if defn.isFunctionSymbol(tycon.symbol) =>
         // ??? fill it with another function class
         val argsCount = args.dropRight(1).count(!_.isAnnotErased)
-        println(s"translucentSuperType of $tycon")
-        for (arg <- args)
-          println(s"\n\t$arg <- ${arg.isAnnotErased}")
         defn.FunctionType(argsCount)
       case _ =>
         tryNormalize.orElse(superType)
