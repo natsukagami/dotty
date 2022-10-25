@@ -928,7 +928,7 @@ object Erasure {
      */
     override def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
       trace.force(i"typing def (in erasure) ${ddef.show} ${ddef.asInstanceOf[DefDef].tpe.widen(using preErasureCtx)}", show = true) {
-        def paramIsErased(p: untpd.ValDef) = p.asInstanceOf[ValDef].tpe.widen(using preErasureCtx).isAnnotErased
+        def paramIsErased(p: untpd.ValDef) = p.symbol.is(Flags.Erased)
         if sym.isEffectivelyErased || sym.name.is(BodyRetainerName) then
           erasedDef(sym)
         else

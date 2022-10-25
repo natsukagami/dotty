@@ -647,12 +647,11 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
       case Function(args, body) =>
         var implicitSeen: Boolean = false
         var isGiven: Boolean = false
-        var isErased: Boolean = false
         def argToText(arg: Tree) = arg match {
           case arg @ ValDef(name, tpt, _) =>
             val implicitText =
               if ((arg.mods.is(Given))) { isGiven = true; "" }
-              else if ((arg.mods.is(Erased))) { isErased = true; "" }
+              else if ((arg.mods.is(Erased))) { keywordStr("erased ") }
               else if ((arg.mods.is(Implicit)) && !implicitSeen) { implicitSeen = true; keywordStr("implicit ") }
               else ""
             implicitText ~ toText(name) ~ optAscription(tpt)
@@ -663,7 +662,6 @@ class RefinedPrinter(_ctx: Context) extends PlainPrinter(_ctx) {
           case (arg @ ValDef(_, tpt, _)) :: Nil if tpt.isEmpty => argToText(arg)
           case _ =>
             "("
-            ~ keywordText("erased ").provided(isErased)
             ~ Text(args.map(argToText), ", ")
             ~ ")"
         }

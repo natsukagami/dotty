@@ -53,6 +53,7 @@ import cc.CheckCaptures
 import config.Config
 
 import scala.annotation.constructorOnly
+import org.scalajs.ir.Trees.MemberFlags
 
 object Typer {
 
@@ -1488,9 +1489,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                   .withType(paramType.translateFromRepeated(toArray = false))
                   .withSpan(param.span.endPos)
               )
-            val ret = cpy.ValDef(param)(tpt = paramTpt)
+            var ret = cpy.ValDef(param)(tpt = paramTpt)
             if paramType.isAnnotErased then
-              ret.symbol.setFlag(Erased)
+              ret.symbol.setFlag(Flags.Erased)
             println(s"\t\tdesugaring! ${param} => ${ret} (${paramType.isAnnotErased} ${ret.symbol.is(Flags.Erased)})")
             ret
       desugared = desugar.makeClosure(inferredParams, fnBody, resultTpt, isContextual, tree.span)
@@ -2305,7 +2306,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       sym.owner.info.decls.openForMutations.unlink(sym)
       return EmptyTree
     }
-    trace.force(s"typing def ${ddef.show} (${ddef.sourcePos.show}) ${ddef.paramss}", show=true) {
+    trace.force(s"typing def ${ddef.show} (${ddef.sourcePos.show}) ${ddef.paramss.nestedMap(p => (p, p.mods))}", show=true) {
     // TODO: - Remove this when `scala.language.experimental.erasedDefinitions` is no longer experimental.
     //       - Modify signature to `erased def erasedValue[T]: T`
     if sym.eq(defn.Compiletime_erasedValue) then
