@@ -1501,10 +1501,8 @@ class Definitions {
    */
   def functionTypeErasure(cls: Symbol): Type =
     val typ = cls.info
-    println(s"erasure for $cls ($typ)")
     val arity = scalaClassName(cls).functionArity
-    if false then FunctionType(0)
-    else if arity > 22 then FunctionXXLClass.typeRef
+    if arity > 22 then FunctionXXLClass.typeRef
     else if arity >= 0 then FunctionType(arity)
     else NoType
 
@@ -1761,9 +1759,7 @@ class Definitions {
         else None
 
   def isErasedFunctionType(tp: Type)(using Context): Boolean =
-    println(s"isErasedFunctionType for $tp")
-    ??? // TODO
-    // tp.dealias.typeSymbol.name.isErasedFunction && isFunctionType(tp)
+    false // TODO erased: remove
 
   /** A whitelist of Scala-2 classes that are known to be pure */
   def isAssuredNoInits(sym: Symbol): Boolean =

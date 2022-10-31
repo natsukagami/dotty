@@ -100,8 +100,7 @@ class Synthesizer(typer: Typer)(using @constructorOnly c: Context):
           expected =:= defn.FunctionOf(actualArgs, actualRet,
             defn.isContextFunctionType(baseFun))
         val arity: Int =
-          if defn.isErasedFunctionType(fun) || defn.isErasedFunctionType(fun) then -1 // TODO support?
-          else if defn.isFunctionType(fun) then
+          if defn.isFunctionType(fun) then
             // TupledFunction[(...) => R, ?]
             fun.dropDependentRefinement.dealias.argInfos match
               case funArgs :+ funRet

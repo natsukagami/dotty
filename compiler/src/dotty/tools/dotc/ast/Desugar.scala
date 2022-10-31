@@ -1483,8 +1483,8 @@ object desugar {
       case vd: ValDef => vd
     }
 
-  def makeContextualFunction(formals: List[Tree], body: Tree, isErased: Boolean)(using Context): Function = {
-    val mods = if (isErased) Given | Erased else Given
+  def makeContextualFunction(formals: List[Tree], body: Tree)(using Context): Function = {
+    val mods = Given
     val params = makeImplicitParameters(formals, mods)
     FunctionWithMods(params, body, Modifiers(mods))
   }

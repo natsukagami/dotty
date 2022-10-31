@@ -99,9 +99,7 @@ class SpecializeFunctions extends MiniPhase {
                   tpd.This(prefix.cls).select(specializedApply)
                 case TermRef(prefix: NamedType, name) =>
                   tpd.ref(prefix).select(specializedApply)
-          val ret = newSel.appliedToTermArgs(args)
-          println(s"++ specializing $tree\n\told fun = ${tree.fun.tpe}\n\tnew fun = ${ret.fun.tpe.widen}\n\targs = $argTypes\n\tnew sel = ${newSel.tpe.widen}")
-          ret
+          newSel.appliedToTermArgs(args)
         else tree
       case _ => tree
     }
