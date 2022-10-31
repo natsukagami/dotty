@@ -1525,17 +1525,27 @@ object Parsers {
             functionRest(Nil)
           }
           else {
-            if isErased then imods = addModifier(imods)
             val paramStart = in.offset
             val ts = in.currentRegion.withCommasExpected {
+              val erasedParam = if isErased then addModifier(EmptyModifiers) else EmptyModifiers
               funArgType() match
                 case Ident(name) if name != tpnme.WILDCARD && in.isColon =>
                   isValParamList = true
+                  def parseParam(start: Offset, name: TermName, mods: Modifiers) = {
+                    atSpan(start) {
+                      val mods1 = if isErased then addModifier(mods) else mods
+                      typedFunParam(in.offset, name, mods1)
+                    }
+                  }
                   commaSeparatedRest(
-                    typedFunParam(paramStart, name.toTermName, imods),
-                    () => typedFunParam(in.offset, ident(), imods))
+                    parseParam(paramStart, name.toTermName, imods),
+                    () => parseParam(in.offset, ident(), imods))
                 case t =>
-                  commaSeparatedRest(t, funArgType)
+                  def parseParam() = {
+                    val mods = if isErased then addModifier(EmptyModifiers) else EmptyModifiers
+                    funArgType().withMods(mods)
+                  }
+                  commaSeparatedRest(t, parseParam)
             }
             accept(RPAREN)
             if isValParamList || in.isArrow || isPureArrow then
