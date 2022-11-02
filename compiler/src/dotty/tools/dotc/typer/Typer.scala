@@ -1295,6 +1295,17 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
      */
     def propagateErased(app: Tree): Tree = app // TODO erase this
 
+    // def transformErasedParam(param: ValDef): ValDef =
+    //   if param.mods.is(Erased) then
+    //     val tpt = param.tpt
+    //     // val annotated = untpd.Annotated(
+    //     //   tpt,
+
+    //     // )
+    //     // cpy.ValDef(param)(tpt = )
+    //     ???
+    //   else param
+
     /** Typechecks dependent function type with given parameters `params` */
     def typedDependent(params: List[untpd.ValDef])(using Context): Tree =
       val fixThis = new untpd.UntypedTreeMap:
@@ -2287,7 +2298,8 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     completeAnnotations(vdef, sym)
     if (sym.isOneOf(GivenOrImplicit)) checkImplicitConversionDefOK(sym)
     if sym.is(Module) then checkNoModuleClash(sym)
-    val tpt1 = checkSimpleKinded(typedType(tpt))
+    val tpt0 = checkSimpleKinded(typedType(tpt))
+    val tpt1 = if sym.is(Erased) then TypeTree(AnnotatedType(tpt0.tpe, Annotation(defn.ErasedParamAnnot))) else tpt0
     val rhs1 = vdef.rhs match {
       case rhs @ Ident(nme.WILDCARD) => rhs withType tpt1.tpe
       case rhs => typedExpr(rhs, tpt1.tpe.widenExpr)
@@ -2296,7 +2308,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     postProcessInfo(sym)
     vdef1.setDefTree
 
-  def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree = 
+  def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
     if (!sym.info.exists) { // it's a discarded synthetic case class method, drop it
       assert(sym.is(Synthetic) && desugar.isRetractableCaseClassMethodName(sym.name))
       sym.owner.info.decls.openForMutations.unlink(sym)
