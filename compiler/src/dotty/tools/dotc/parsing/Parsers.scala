@@ -1504,7 +1504,7 @@ object Parsers {
               if isByNameType(tpt) then
                 syntaxError(em"parameter of type lambda may not be call-by-name", tpt.span)
             TermLambdaTypeTree(params.asInstanceOf[List[ValDef]], resultType)
-          else if imods.isOneOf(Given | Erased | Impure) then
+          else if imods.isOneOf(Given | Impure) then
             if imods.is(Given) && params.isEmpty then
               syntaxError("context function types require at least one parameter", paramSpan)
             FunctionWithMods(params, resultType, imods)
@@ -1525,16 +1525,25 @@ object Parsers {
             functionRest(Nil)
           }
           else {
-            if isErased then imods = addModifier(imods)
             val paramStart = in.offset
+            val firstMods = if isErased then addModifier(imods) else imods
             val ts = in.currentRegion.withCommasExpected {
               funArgType() match
                 case Ident(name) if name != tpnme.WILDCARD && in.isColon =>
                   isValParamList = true
+                  def funParam(start: Offset, mods: Modifiers) = {
+                    atSpan(start) {
+                      val mods1 = if isErased then addModifier(mods) else mods
+                      typedFunParam(in.offset, ident(), mods1)
+                    }
+                  }
                   commaSeparatedRest(
-                    typedFunParam(paramStart, name.toTermName, imods),
-                    () => typedFunParam(in.offset, ident(), imods))
+                    typedFunParam(paramStart, name.toTermName, firstMods),
+                    () => funParam(in.offset, imods))
                 case t =>
+                  // For now we just reject `erased` in (T, U) => V definitions (i.e. you need parameter names)
+                  if firstMods.is(Erased) then
+                    syntaxError("Implementation restriction: erased parameters are not allowed without parameter names", paramStart)
                   commaSeparatedRest(t, funArgType)
             }
             accept(RPAREN)
