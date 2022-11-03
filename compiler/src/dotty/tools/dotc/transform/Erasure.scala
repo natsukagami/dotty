@@ -692,7 +692,9 @@ object Erasure {
           else
             val qualT = tree.qualifier.asInstanceOf[Tree].tpe.widen(using preErasureCtx)
             if defn.isFunctionClass(owner) then
-              val argsCount = qualT.asInstanceOf[AppliedType].args.dropRight(1).count(!_.isAnnotErased)
+              val argsCount = qualT match
+                case AppliedType(_, args) => args.dropRight(1).count(!_.isAnnotErased)
+                case RefinedType(_, _, mt) => mt.argInfos.count(!_.isAnnotErased)
               defn.FunctionType(argsCount).typeSymbol
             else
               owner
