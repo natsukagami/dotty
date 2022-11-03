@@ -60,7 +60,6 @@ class SpecializeFunctions extends MiniPhase {
           .subst(ddef.termParamss.head.map(_.symbol), vparamss.head.map(_.symbol))
       })
 
-
     // create a forwarding to the specialized apply
     val args = ddef.termParamss.head.map(vparam => ref(vparam.symbol))
     val rhs = This(cls).select(specializedApply).appliedToTermArgs(args)

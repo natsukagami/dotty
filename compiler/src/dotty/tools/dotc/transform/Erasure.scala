@@ -332,8 +332,6 @@ object Erasure {
      *  in ExtensionMethods#transform.
      */
     def cast(tree: Tree, pt: Type)(using Context): Tree = 
-      def callStack = try { throw Exception("exception") } catch { case ex => ex.getStackTrace drop 2 }
-
       def wrap(tycon: TypeRef) =
         ref(u2evt(tycon.typeSymbol.asClass)).appliedTo(tree)
       def unwrap(tycon: TypeRef) =
@@ -406,6 +404,7 @@ object Erasure {
             adaptToType(unbox(tree, pt), pt)
           else
             cast(tree, pt)
+    end adaptToType
 
     /** The following code:
      *
@@ -829,9 +828,11 @@ object Erasure {
     override def typedApply(tree: untpd.Apply, pt: Type)(using Context): Tree =
       val Apply(fun, args) = tree
       val origFun = fun.asInstanceOf[tpd.Tree]
-      val origFunType = origFun.tpe.widen(using preErasureCtx).asInstanceOf[MethodType]
-      val ownArgs = args.zip(origFunType.paramInfos).flatMap((arg, param) =>
-        if !param.isAnnotErased then Some(arg) else None)
+      val origFunType = origFun.tpe.widen(using preErasureCtx)
+      val ownArgs = origFunType match
+        case mt@MethodType(_) => args.zip(mt.paramInfos).flatMap((arg, param) =>
+          if !param.isAnnotErased then Some(arg) else None)
+        case _ => args
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match
         case mt: MethodType =>
@@ -1060,14 +1061,15 @@ object Erasure {
     override def typedImport(tree: untpd.Import)(using Context) = EmptyTree
 
     override def adapt(tree: Tree, pt: Type, locked: TypeVars)(using Context): Tree =
-      if ctx.phase != erasurePhase && ctx.phase != erasurePhase.next then
-        // this can happen when reading annotations loaded during erasure,
-        // since these are loaded at phase typer.
-        atPhase(erasurePhase.next)(adapt(tree, pt, locked))
-      else if (tree.isEmpty) tree
-      else if (ctx.mode is Mode.Pattern) tree // TODO: replace with assertion once pattern matcher is active
-      else
-        adaptToType(tree, pt)
+      trace(i"adapting ${tree.showSummary()}: ${tree.tpe} to $pt", show = true) {
+        if ctx.phase != erasurePhase && ctx.phase != erasurePhase.next then
+          // this can happen when reading annotations loaded during erasure,
+          // since these are loaded at phase typer.
+          atPhase(erasurePhase.next)(adapt(tree, pt, locked))
+        else if (tree.isEmpty) tree
+        else if (ctx.mode is Mode.Pattern) tree // TODO: replace with assertion once pattern matcher is active
+        else adaptToType(tree, pt)
+      }
 
     override def simplify(tree: Tree, pt: Type, locked: TypeVars)(using Context): tree.type = tree
   }

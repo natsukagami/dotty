@@ -1229,7 +1229,7 @@ object Types {
         if tp1 eq tp then tp
         else
           val tp2 = tp1.widen
-          if tp2 ne tp1 then tp2 else tp 
+          if tp2 ne tp1 then tp2 else tp
 
     /** Widen from singleton type to its underlying non-singleton
      *  base type by applying one or more `underlying` dereferences.

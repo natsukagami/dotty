@@ -1283,28 +1283,10 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       case _ => EmptyFlags
     }
 
-    // assert(!funFlags.is(Erased) || !args.isEmpty, "An empty function cannot not be erased")
-
     val numArgs = args.length
     val isContextual = funFlags.is(Given)
     val isImpure = funFlags.is(Impure)
     val funSym = defn.FunctionSymbol(numArgs, isContextual, isImpure)
-
-    /** If `app` is a function type with arguments that are all erased classes,
-     *  turn it into an erased function type.
-     */
-    def propagateErased(app: Tree): Tree = app // TODO erase this
-
-    // def transformErasedParam(param: ValDef): ValDef =
-    //   if param.mods.is(Erased) then
-    //     val tpt = param.tpt
-    //     // val annotated = untpd.Annotated(
-    //     //   tpt,
-
-    //     // )
-    //     // cpy.ValDef(param)(tpt = )
-    //     ???
-    //   else param
 
     /** Typechecks dependent function type with given parameters `params` */
     def typedDependent(params: List[untpd.ValDef])(using Context): Tree =
@@ -1328,7 +1310,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
       val resTpt = TypeTree(mt.nonDependentResultApprox).withSpan(body.span)
       val typeArgs = appDef.termParamss.head.map(_.tpt) :+ resTpt
       val tycon = TypeTree(funSym.typeRef)
-      val core = propagateErased(AppliedTypeTree(tycon, typeArgs))
+      val core = AppliedTypeTree(tycon, typeArgs)
       RefinedTypeTree(core, List(appDef), ctx.owner.asClass)
     end typedDependent
 
@@ -1337,12 +1319,11 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
         typedDependent(args.asInstanceOf[List[untpd.ValDef]])(
           using ctx.fresh.setOwner(newRefinedClassSymbol(tree.span)).setNewScope)
       case _ =>
-        propagateErased(
-          typed(cpy.AppliedTypeTree(tree)(untpd.TypeTree(funSym.typeRef), args :+ body), pt))
+        typed(cpy.AppliedTypeTree(tree)(untpd.TypeTree(funSym.typeRef), args :+ body), pt)
     }
   }
 
-  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = 
+  def typedFunctionValue(tree: untpd.Function, pt: Type)(using Context): Tree = {
     val untpd.Function(params: List[untpd.ValDef] @unchecked, _) = tree: @unchecked
 
     val isContextual = tree match {
@@ -1507,6 +1488,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
 
     typed(desugared, pt)
       .showing(i"desugared fun $tree --> $desugared with pt = $pt", typr)
+  }
 
   def typedClosure(tree: untpd.Closure, pt: Type)(using Context): Tree = {
     val env1 = tree.env mapconserve (typed(_))
@@ -2293,7 +2275,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     if filters == List(MessageFilter.None) then sup.markUsed()
     ctx.run.nn.suppressions.addSuppression(sup)
 
-  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = 
+  def typedValDef(vdef: untpd.ValDef, sym: Symbol)(using Context): Tree = {
     val ValDef(name, tpt, _) = vdef
     completeAnnotations(vdef, sym)
     if (sym.isOneOf(GivenOrImplicit)) checkImplicitConversionDefOK(sym)
@@ -2307,6 +2289,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
     val vdef1 = assignType(cpy.ValDef(vdef)(name, tpt1, rhs1), sym)
     postProcessInfo(sym)
     vdef1.setDefTree
+  }
 
   def typedDefDef(ddef: untpd.DefDef, sym: Symbol)(using Context): Tree =
     if (!sym.info.exists) { // it's a discarded synthetic case class method, drop it
