@@ -18,6 +18,7 @@ import config.Feature
 import util.SrcPos
 import reporting._
 import NameKinds.WildcardParamName
+import dotty.tools.dotc.transform.TypeUtils.isErasedType
 
 object PostTyper {
   val name: String = "posttyper"
@@ -309,7 +310,7 @@ class PostTyper extends MacroTransform with IdentityDenotTransformer { thisPhase
               tpd.cpy.Apply(tree)(
                 tree.fun,
                 tree.args.zipWithConserve(methType.paramInfos)((arg, param) =>
-                  if (!param.hasAnnotation(defn.ErasedParamAnnot)) arg
+                  if (!param.isErasedType) arg
                   else if (methType.isImplicitMethod && arg.span.isSynthetic)
                     arg match
                       case _: RefTree | _: Apply | _: TypeApply if arg.symbol.is(Erased) =>

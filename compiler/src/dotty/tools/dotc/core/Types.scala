@@ -38,6 +38,7 @@ import java.lang.ref.WeakReference
 import compiletime.uninitialized
 import cc.{CapturingType, CaptureSet, derivedCapturingType, isBoxedCapturing, EventuallyCapturingType, boxedUnlessFun}
 import CaptureSet.{CompareResult, IdempotentCaptRefMap, IdentityCaptRefMap}
+import transform.TypeUtils.isErasedType
 
 import scala.annotation.internal.sharable
 import scala.annotation.threadUnsafe
@@ -377,7 +378,7 @@ object Types {
     }
 
     /** Is the type annotated to be erased? */
-    final def isAnnotErased(using Context): Boolean = hasAnnotation(defn.ErasedParamAnnot)
+    final def isAnnotatedErased(using Context): Boolean = hasAnnotation(defn.ErasedParamAnnot)
 
     /** Does this type have a supertype with an annotation satisfying given predicate `p`? */
     def derivesAnnotWith(p: Annotation => Boolean)(using Context): Boolean = this match {
@@ -4350,7 +4351,7 @@ object Types {
         tycon.translucentSuperType.applyIfParameterized(args)
       case tycon: TypeRef if defn.isFunctionSymbol(tycon.symbol) =>
         // ??? fill it with another function class
-        val argsCount = args.dropRight(1).count(!_.isAnnotErased)
+        val argsCount = args.dropRight(1).count(!_.isErasedType)
         defn.FunctionType(argsCount)
       case _ =>
         tryNormalize.orElse(superType)

@@ -1481,7 +1481,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                   .withSpan(param.span.endPos)
               )
             val ret = cpy.ValDef(param)(tpt = paramTpt)
-            if paramType.isAnnotErased then
+            if paramType.isErasedType then
               ret.symbol.setFlag(Flags.Erased)
             ret
       desugared = desugar.makeClosure(inferredParams, fnBody, resultTpt, isContextual, tree.span)

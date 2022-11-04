@@ -23,6 +23,7 @@ import inlines.Inlines
 import typer.ProtoTypes._
 import typer.ErrorReporting.errorTree
 import typer.Checking.checkValue
+import core.TypeErasure
 import core.TypeErasure._
 import core.Decorators._
 import dotty.tools.dotc.ast.{tpd, untpd}
@@ -191,7 +192,7 @@ class Erasure extends Phase with DenotTransformer {
   def assertErased(tp: Type, tree: tpd.Tree = tpd.EmptyTree)(using Context): Unit = {
     def isAllowed(cls: Symbol, sourceName: String) =
       tp.typeSymbol == cls && ctx.compilationUnit.source.file.name == sourceName
-    assert(isErasedType(tp) ||
+    assert(TypeErasure.isErasedType(tp) ||
            isAllowed(defn.ArrayClass, "Array.scala") ||
            isAllowed(defn.TupleClass, "Tuple.scala") ||
            isAllowed(defn.NonEmptyTupleClass, "Tuple.scala") ||
@@ -692,8 +693,8 @@ object Erasure {
             val qualT = tree.qualifier.asInstanceOf[Tree].tpe.widen(using preErasureCtx)
             if defn.isFunctionClass(owner) then
               val argsCount = qualT match
-                case AppliedType(_, args) => args.dropRight(1).count(!_.isAnnotErased)
-                case RefinedType(_, _, mt) => mt.argInfos.count(!_.isAnnotErased)
+                case AppliedType(_, args) => args.dropRight(1).count(!_.isErasedType)
+                case RefinedType(_, _, mt) => mt.argInfos.count(!_.isErasedType)
               defn.FunctionType(argsCount).typeSymbol
             else
               owner
@@ -831,7 +832,7 @@ object Erasure {
       val origFunType = origFun.tpe.widen(using preErasureCtx)
       val ownArgs = origFunType match
         case mt@MethodType(_) => args.zip(mt.paramInfos).flatMap((arg, param) =>
-          if !param.isAnnotErased then Some(arg) else None)
+          if !param.isErasedType then Some(arg) else None)
         case _ => args
       val fun1 = typedExpr(fun, AnyFunctionProto)
       fun1.tpe.widen match

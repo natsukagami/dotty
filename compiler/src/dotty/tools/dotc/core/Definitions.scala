@@ -17,6 +17,7 @@ import util.Spans.NoSpan
 import config.Feature
 import Symbols.requiredModuleRef
 import cc.{CapturingType, CaptureSet, EventuallyCapturingType}
+import transform.TypeUtils.isErasedType
 
 import scala.annotation.tailrec
 
@@ -1681,7 +1682,7 @@ class Definitions {
 
   def isSpecializableFunction(cls: ClassSymbol, paramTypes: List[Type], retType: Type)(using Context): Boolean =
     paramTypes.length <= 2
-    && !paramTypes.exists(_.isAnnotErased)
+    && !paramTypes.exists(_.isErasedType)
     && (cls.derivesFrom(FunctionSymbol(paramTypes.length)) || isByNameFunctionClass(cls))
     && isSpecializableFunctionSAM(paramTypes, retType)
 

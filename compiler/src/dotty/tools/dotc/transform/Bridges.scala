@@ -13,6 +13,7 @@ import StdNames.nme
 import Constants.Constant
 import TypeErasure.transformInfo
 import Erasure.Boxing.adaptClosure
+import dotty.tools.dotc.transform.TypeUtils.isErasedType
 
 /** A helper class for generating bridge methods in class `root`. */
 class Bridges(root: ClassSymbol, thisPhase: DenotTransformer)(using Context) {
@@ -131,7 +132,7 @@ class Bridges(root: ClassSymbol, thisPhase: DenotTransformer)(using Context) {
         else
           val defn.ContextFunctionType(argTypes, resType) = tp: @unchecked
           val anonFun = newAnonFun(ctx.owner,
-            MethodType(argTypes.filterConserve(!_.hasAnnotation(defn.ErasedParamAnnot)), resType),
+            MethodType(argTypes.filterConserve(!_.isErasedType), resType),
             coord = ctx.owner.coord)
           anonFun.info = transformInfo(anonFun, anonFun.info)
 

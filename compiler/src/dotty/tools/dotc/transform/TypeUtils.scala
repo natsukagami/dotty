@@ -23,6 +23,10 @@ object TypeUtils {
     def isPrimitiveValueType(using Context): Boolean =
       self.classSymbol.isPrimitiveValueClass
 
+    /** Are the type's values going to be erased during compilation? */
+    def isErasedType(using Context): Boolean =
+      self.isAnnotatedErased || self.isErasedClass
+
     def isErasedClass(using Context): Boolean =
       self.underlyingClassRef(refinementOK = true).typeSymbol.is(Flags.Erased)
 

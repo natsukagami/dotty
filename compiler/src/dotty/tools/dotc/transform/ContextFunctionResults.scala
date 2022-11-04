@@ -8,6 +8,7 @@ import StdNames.nme
 import ast.untpd
 import ast.tpd._
 import config.Config
+import TypeUtils.isErasedType
 
 object ContextFunctionResults:
 
@@ -59,7 +60,7 @@ object ContextFunctionResults:
   def contextResultsAreErased(sym: Symbol)(using Context): Boolean =
     // Assume that we have the type of the denote here.
     def allErased(tp: Type): Boolean = tp.dealias match
-      case defn.ContextFunctionType(args, resTpe) => args.forall(_.isAnnotErased) && allErased(resTpe)
+      case defn.ContextFunctionType(args, resTpe) => args.forall(_.isErasedType) && allErased(resTpe)
       case _ => true
     contextResultCount(sym) > 0 && allErased(sym.info.finalResultType)
 
@@ -86,12 +87,12 @@ object ContextFunctionResults:
       else
         val defn.ContextFunctionType(params, resTpe) = tp: @unchecked
         val rest = contextParamCount(resTpe, crCount - 1)
-        params.count(!_.isAnnotErased) + rest
+        params.count(!_.isErasedType) + rest
 
     def normalParamCount(tp: Type): Int = tp.widenExpr.stripPoly match
       case mt: MethodType =>
         val rest = normalParamCount(mt.resType)
-        mt.paramInfos.count(!_.isAnnotErased) + rest
+        mt.paramInfos.count(!_.isErasedType) + rest
       case _ => contextParamCount(tp, contextResultCount(sym))
 
     normalParamCount(sym.info)

@@ -304,7 +304,7 @@ object GenericSignatures {
         case mtpe: MethodType =>
           // erased method parameters do not make it to the bytecode.
           def effectiveParamInfoss(t: Type)(using Context): List[List[Type]] = t match {
-            case t: MethodType => t.paramInfos.filter(!_.isAnnotErased) :: effectiveParamInfoss(t.resType)
+            case t: MethodType => t.paramInfos.filter(!_.isErasedType) :: effectiveParamInfoss(t.resType)
             case _ => Nil
           }
           val params = effectiveParamInfoss(mtpe).flatten

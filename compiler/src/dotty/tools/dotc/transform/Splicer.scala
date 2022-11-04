@@ -18,6 +18,7 @@ import dotty.tools.dotc.core.Symbols._
 import dotty.tools.dotc.core.Denotations.staticRef
 import dotty.tools.dotc.core.TypeErasure
 import dotty.tools.dotc.core.Constants.Constant
+import dotty.tools.dotc.transform.TypeUtils.isErasedType
 
 import scala.util.control.NonFatal
 import dotty.tools.dotc.util.SrcPos
@@ -317,7 +318,7 @@ object Splicer {
 
       fnType.dealias match
         case fnType: MethodType =>
-          val argTypes = fnType.paramInfos.filterConserve(!_.isAnnotErased)
+          val argTypes = fnType.paramInfos.filterConserve(!_.isErasedType)
           assert(argss.head.size == argTypes.size)
           interpretArgsGroup(argss.head, argTypes) ::: interpretArgs(argss.tail, fnType.resType)
         case fnType: AppliedType if defn.isContextFunctionType(fnType) =>
@@ -558,7 +559,7 @@ object Splicer {
         case fn: Select => Some((fn, Nil))
         case Apply(f @ Call0(fn, args1), args2) =>
           val methType = f.tpe.widenDealias.asInstanceOf[MethodType]
-          val args = args2.zip(methType.paramInfos).flatMap((arg, param) => if param.isAnnotErased then None else Some(arg))
+          val args = args2.zip(methType.paramInfos).flatMap((arg, param) => if param.isErasedType then None else Some(arg))
           Some((fn, args :: args1))
         case TypeApply(Call0(fn, args), _) => Some((fn, args))
         case _ => None
