@@ -122,8 +122,9 @@ object Scaladoc:
       .filter(s => !s.isDefaultIn(summary.sstate))
       .filter(allScalaSettings.contains)
       .partition(commonScalaSettings.contains)
-    shared.foreach(setInGlobal)
+    (shared ++ other).foreach(setInGlobal)
 
+    report.echo(s"Using settings: ${shared.map(_.name)}")
     if !other.isEmpty then report.echo(s"Skipping unused scalacOptions: ${other.map(_.name).mkString(", ")}")
 
     def parseTastyRoots(roots: String) =

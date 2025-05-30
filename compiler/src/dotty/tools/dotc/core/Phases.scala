@@ -127,6 +127,7 @@ object Phases {
      *  if fusion is enabled, phases in same subgroup will be fused to single phase.
      */
     final def usePhases(phasess: List[Phase], runCtx: FreshContext, fuse: Boolean = true): Unit = {
+      println(s"using phases: ${phasess.map(_.phaseName)}")
 
       val flatPhases = collection.mutable.ListBuffer[Phase]()
 

@@ -20,6 +20,7 @@ import dotty.tools.dotc.util.ClasspathFromClassloader
 import dotty.tools.dotc.CompilationUnit
 import dotty.tools.unsupported
 import dotty.tools.dotc.report
+import dotty.tools.dotc.cc
 
 import java.io.File.pathSeparator
 
@@ -115,6 +116,7 @@ object ScaladocInternalTastyInspector:
       override protected def picklerPhases: List[List[Phase]] = Nil
 
       override protected def transformPhases: List[List[Phase]] = Nil
+
 
       override protected def backendPhases: List[List[Phase]] =
         List(new TastyInspectorPhase) ::  // Perform a callback for each compilation unit

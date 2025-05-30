@@ -1023,7 +1023,7 @@ class TreeUnpickler(reader: TastyReader,
           else
             val args = until(end)(readTpt())
             val cls = tycon.classSymbol
-            assert(cls.typeParams.hasSameLengthAs(args))
+            assert(cls.typeParams.hasSameLengthAs(args), f"Expect ${cls.typeParams} to have the same length as $args")
             cls.typeRef.appliedTo(args.tpes)
         case APPLY | BLOCK =>
           val end = readEnd()
