@@ -85,6 +85,21 @@ final class consume extends annotation.StaticAnnotation
 @deprecated
 sealed trait Exists extends Capability
 
+/** An annotation on value definitions `x` stating that the hidden set of the
+ *  binding can grow over time.
+ */
+@experimental
+final class scoped extends annotation.StaticAnnotation
+
+@experimental
+object scoped:
+  extension [T](x: T)
+    /** Binds all captures of the value `x` into the hidden set of the scoped variable `scope`.
+     *  The returned value captures instead only `scope`.
+     *  This call is handled specially by the compiler.
+     */
+    def bindCapturesTo(scope: Any @scoped): T = x
+
 @experimental
 object internal:
 
