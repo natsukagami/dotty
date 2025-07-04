@@ -1027,6 +1027,9 @@ class Definitions {
     @tu lazy val Caps_ContainsTrait: TypeSymbol = CapsModule.requiredType("Contains")
     @tu lazy val Caps_ContainsModule: Symbol = requiredModule("scala.caps.Contains")
     @tu lazy val Caps_containsImpl: TermSymbol = Caps_ContainsModule.requiredMethod("containsImpl")
+    @tu lazy val Caps_scoped: ClassSymbol = requiredClass("scala.caps.scoped")
+    @tu lazy val Caps_scopedModule: Symbol = requiredModule("scala.caps.scoped")
+    @tu lazy val Caps_bindCapturesTo: Symbol = Caps_scopedModule.requiredMethod("bindCapturesTo")
 
   @tu lazy val PureClass: ClassSymbol = requiredClass("scala.caps.Pure")
 
@@ -2095,6 +2098,7 @@ class Definitions {
     RequiresCapabilityAnnot,
     captureRoot, Caps_CapSet, Caps_ContainsTrait, Caps_ContainsModule, Caps_ContainsModule.moduleClass,
     ConsumeAnnot, UseAnnot, ReserveAnnot,
+    Caps_scoped, Caps_scopedModule, Caps_scopedModule.moduleClass, Caps_bindCapturesTo,
     CapsUnsafeModule, CapsUnsafeModule.moduleClass,
     CapsInternalModule, CapsInternalModule.moduleClass,
     RetainsAnnot, RetainsCapAnnot, RetainsByNameAnnot)
