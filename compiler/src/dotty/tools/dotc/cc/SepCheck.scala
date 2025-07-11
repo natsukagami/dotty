@@ -884,10 +884,10 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
 
   def inSection[T](op: => T)(using Context): T =
     val savedDefsShadow = defsShadow
-    val savedPrevionsDefs = previousDefs
+    val savedPrevionsDefs = previousDefs.size
     try op
     finally
-      previousDefs = savedPrevionsDefs
+      previousDefs = previousDefs.takeRight(savedPrevionsDefs)
       defsShadow = savedDefsShadow
 
   def traverseSection[T](tree: Tree)(using Context) = inSection(traverseChildren(tree))
@@ -898,6 +898,9 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
     sym.isInlineMethod
       // We currently skip inline method bodies since these seem to generan
       // spurious recheck completions. Test case is i20237.scala
+
+  // def checkBindCapturesTo(tree: GenericApply): Unit =
+
 
   /** Traverse `tree` and perform separation checks everywhere */
   def traverse(tree: Tree)(using Context): Unit =
@@ -914,7 +917,23 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
           traverseChildren(tree)
           tree.tpe match
             case _: MethodOrPoly =>
-            case _ => traverseApply(tree)
+            case _ =>
+              traverseApply(tree)
+              if tree.fun.symbol == defn.Caps_bindCapturesTo then
+                tree.args match
+                  case List(source, t @ Ident(_)) =>
+                    var changed = false
+                    previousDefs = previousDefs.mapconserve: info =>
+                      if info.symbol == t.symbol then
+                        assert(!changed)
+                        changed = true
+                        info.copy(hidden = info.hidden ++ captures(source))
+                      else info
+                    assert(changed)
+                    println((source, t.symbol, previousDefs.find(_.symbol == t.symbol)))
+                  case _ =>
+                    report.error(em"Invalid call to `bindCapturesTo`\n\n$tree", tree.srcPos)
+                // target.changeNonLocalOwners
         case _: Block | _: Template =>
           traverseSection(tree)
         case tree: ValDef =>

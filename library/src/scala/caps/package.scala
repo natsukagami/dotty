@@ -93,12 +93,11 @@ final class scoped extends annotation.StaticAnnotation
 
 @experimental
 object scoped:
-  extension [T](x: T)
-    /** Binds all captures of the value `x` into the hidden set of the scoped variable `scope`.
-     *  The returned value captures instead only `scope`.
-     *  This call is handled specially by the compiler.
-     */
-    def bindCapturesTo(scope: Any @scoped): T = x
+  /** Binds all captures of the value `x` into the hidden set of the scoped variable `scope`.
+   *  The returned value captures instead only `scope`.
+   *  This call is handled specially by the compiler.
+   */
+  def bindCapturesTo(ref: Any, scope: Any @scoped): ref.type = ref
 
 @experimental
 object internal:
