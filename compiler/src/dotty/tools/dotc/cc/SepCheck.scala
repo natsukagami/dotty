@@ -73,10 +73,10 @@ object SepCheck:
    */
   abstract class ConsumedSet:
     /** The references in the set. The array should be treated as immutable in client code */
-    def refs: Array[Capability]
+    def refs: collection.IndexedSeq[Capability]
 
     /** The associated source positoons. The array should be treated as immutable in client code */
-    def locs: Array[SrcPos]
+    def locs: collection.IndexedSeq[SrcPos]
 
     /** The number of references in the set */
     def size: Int
@@ -90,56 +90,43 @@ object SepCheck:
   /** A fixed consumed set consisting of the given references `refs` and
    *  associated source positions `locs`
    */
-  class ConstConsumedSet(val refs: Array[Capability], val locs: Array[SrcPos]) extends ConsumedSet:
+  class ConstConsumedSet(val refs: collection.IndexedSeq[Capability], val locs: collection.IndexedSeq[SrcPos]) extends ConsumedSet:
     def size = refs.size
 
   /** A mutable consumed set, which is initially empty */
   class MutConsumedSet extends ConsumedSet:
-    var refs: Array[Capability] = new Array(4)
-    var locs: Array[SrcPos] = new Array(4)
-    var size = 0
+    import collection.mutable.ArrayBuffer
+    val refs: ArrayBuffer[Capability] = new ArrayBuffer(4)
+    val locs: ArrayBuffer[SrcPos] = new ArrayBuffer(4)
+    inline def size = refs.size
     var peaks: Refs = emptyRefs
-
-    private def double[T <: AnyRef : ClassTag](xs: Array[T]): Array[T] =
-      val xs1 = new Array[T](xs.length * 2)
-      xs.copyToArray(xs1)
-      xs1
-
-    private def ensureCapacity(added: Int): Unit =
-      if size + added > refs.length then
-        refs = double(refs)
-        locs = double(locs)
 
     /** If `ref` is in the set, its associated source position, otherwise `null` */
     def get(ref: Capability): SrcPos | Null =
-      var i = 0
-      while i < size && (refs(i) ne ref) do i += 1
-      if i < size then locs(i) else null
+      val index = refs.indexWhere(_ eq ref)
+      if index >= 0 then locs(index) else null
 
     def clashing(ref: Capability)(using Context): SrcPos | Null =
       val refPeaks = ref.peaks
       if !peaks.sharedWith(refPeaks).isEmpty then
-        var i = 0
-        while i < size && refs(i).peaks.sharedWith(refPeaks).isEmpty do
-          i += 1
-        assert(i < size)
-        locs(i)
+        val index = refs.indexWhere(!_.peaks.sharedWith(refPeaks).isEmpty)
+        assert(index >= 0)
+        locs(index)
       else null
 
     /** If `ref` is not yet in the set, add it with given source position */
     def put(ref: Capability, loc: SrcPos)(using Context): Unit =
       if get(ref) == null then
-        ensureCapacity(1)
-        refs(size) = ref
-        locs(size) = loc
-        size += 1
+        refs += ref
+        locs += loc
         peaks = peaks ++ ref.peaks
 
     /** Add all references with their associated positions from `that` which
      *  are not yet in the set.
      */
     def ++= (that: ConsumedSet)(using Context): Unit =
-      for i <- 0 until that.size do put(that.refs(i), that.locs(i))
+        refs ++= that.refs
+        locs ++= that.locs
 
     /** Run `op` and return any new references it created in a separate `ConsumedSet`.
      *  The current mutable set is reset to its state before `op` was run.
@@ -152,11 +139,13 @@ object SepCheck:
         if size == start then EmptyConsumedSet
         else ConstConsumedSet(refs.slice(start, size), locs.slice(start, size))
       finally
-        size = start
+        val toRemove = size - start
+        refs.dropRightInPlace(toRemove)
+        locs.dropRightInPlace(toRemove)
         peaks = savedPeaks
   end MutConsumedSet
 
-  val EmptyConsumedSet = ConstConsumedSet(Array(), Array())
+  val EmptyConsumedSet = ConstConsumedSet(IArray[Capability](), IArray[SrcPos]())
 
   case class PeaksPair(actual: Refs, hidden: Refs)
 
