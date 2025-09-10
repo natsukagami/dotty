@@ -67,6 +67,9 @@ object SepCheck:
         i"the type of the prefix to a call of $meth"
   end TypeRole
 
+  /** The scope of a consume, tied to a symbol. `NoSymbol` = global consume. */
+  type Scope = Symbol
+
   /** A class for segmented sets of consumed references.
    *  References are associated with the source positions where they first appeared.
    *  References are compared with `eq`.
@@ -77,6 +80,9 @@ object SepCheck:
 
     /** The associated source positoons. The array should be treated as immutable in client code */
     def locs: collection.IndexedSeq[SrcPos]
+
+    /** The associated scope of a consumed reference. After the symbol goes out of scope, the consumption is reversed. */
+    def scopes: collection.IndexedSeq[Scope]
 
     /** The number of references in the set */
     def size: Int
@@ -90,7 +96,11 @@ object SepCheck:
   /** A fixed consumed set consisting of the given references `refs` and
    *  associated source positions `locs`
    */
-  class ConstConsumedSet(val refs: collection.IndexedSeq[Capability], val locs: collection.IndexedSeq[SrcPos]) extends ConsumedSet:
+  class ConstConsumedSet(
+    val refs: collection.IndexedSeq[Capability],
+    val locs: collection.IndexedSeq[SrcPos],
+    val scopes: collection.IndexedSeq[Scope],
+  ) extends ConsumedSet:
     def size = refs.size
 
   /** A mutable consumed set, which is initially empty */
@@ -98,6 +108,7 @@ object SepCheck:
     import collection.mutable.ArrayBuffer
     val refs: ArrayBuffer[Capability] = new ArrayBuffer(4)
     val locs: ArrayBuffer[SrcPos] = new ArrayBuffer(4)
+    val scopes: ArrayBuffer[Scope] = new ArrayBuffer(4)
     inline def size = refs.size
     var peaks: Refs = emptyRefs
 
@@ -105,6 +116,25 @@ object SepCheck:
     def get(ref: Capability): SrcPos | Null =
       val index = refs.indexWhere(_ eq ref)
       if index >= 0 then locs(index) else null
+
+    /** Drop consumes that are out-of-scope. */
+    def dropOutOfScopeInPlace(from: Int, inScope: Scope => Boolean)(using Context): Unit =
+      var outputIndex = from
+      def copy(index: Int) =
+        assert(index >= outputIndex)
+        if index > outputIndex then
+          refs(outputIndex) = refs(index)
+          locs(outputIndex) = locs(index)
+          scopes(outputIndex) = scopes(index)
+        outputIndex += 1
+      for i <- from until size do
+        if inScope(scopes(i)) then copy(i)
+      val toRemove = size - outputIndex
+      if toRemove > 0 then
+        refs.dropRightInPlace(toRemove)
+        locs.dropRightInPlace(toRemove)
+        scopes.dropRightInPlace(toRemove)
+        peaks = refs.foldLeft(emptyRefs)(_ ++ _.peaks)
 
     def clashing(ref: Capability)(using Context): SrcPos | Null =
       val refPeaks = ref.peaks
@@ -115,10 +145,11 @@ object SepCheck:
       else null
 
     /** If `ref` is not yet in the set, add it with given source position */
-    def put(ref: Capability, loc: SrcPos)(using Context): Unit =
+    def put(ref: Capability, loc: SrcPos, scope: Scope = NoSymbol)(using Context): Unit =
       if get(ref) == null then
         refs += ref
         locs += loc
+        scopes += scope
         peaks = peaks ++ ref.peaks
 
     /** Add all references with their associated positions from `that` which
@@ -127,6 +158,7 @@ object SepCheck:
     def ++= (that: ConsumedSet)(using Context): Unit =
         refs ++= that.refs
         locs ++= that.locs
+        scopes ++= that.scopes
 
     /** Run `op` and return any new references it created in a separate `ConsumedSet`.
      *  The current mutable set is reset to its state before `op` was run.
@@ -137,15 +169,16 @@ object SepCheck:
       try
         op
         if size == start then EmptyConsumedSet
-        else ConstConsumedSet(refs.slice(start, size), locs.slice(start, size))
+        else ConstConsumedSet(refs.slice(start, size), locs.slice(start, size), scopes.slice(start, size))
       finally
         val toRemove = size - start
         refs.dropRightInPlace(toRemove)
         locs.dropRightInPlace(toRemove)
+        scopes.dropRightInPlace(toRemove)
         peaks = savedPeaks
   end MutConsumedSet
 
-  val EmptyConsumedSet = ConstConsumedSet(IArray[Capability](), IArray[SrcPos]())
+  val EmptyConsumedSet = ConstConsumedSet(IArray[Capability](), IArray[SrcPos](), IArray[Scope]())
 
   case class PeaksPair(actual: Refs, hidden: Refs)
 
@@ -892,10 +925,14 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
   def inSection[T](op: => T)(using Context): T =
     val savedDefsShadow = defsShadow
     val savedPrevionsDefs = previousDefs.size
+    val savedConsumedSetSize = consumed.size
     try op
     finally
       previousDefs = previousDefs.takeRight(savedPrevionsDefs)
       defsShadow = savedDefsShadow
+      consumed.dropOutOfScopeInPlace(
+        from = savedConsumedSetSize,
+        inScope = scope => scope == NoSymbol || previousDefs.findLast(_.symbol == scope).isDefined)
 
   def traverseSection[T](tree: Tree)(using Context) = inSection(traverseChildren(tree))
 
@@ -929,18 +966,14 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
               if tree.fun.symbol == defn.Caps_bindCapturesTo then
                 tree.args match
                   case List(source, t @ Ident(_)) =>
-                    var changed = false
-                    previousDefs = previousDefs.mapconserve: info =>
-                      if info.symbol == t.symbol then
-                        assert(!changed)
-                        changed = true
-                        info.copy(hidden = info.hidden ++ captures(source))
-                      else info
-                    assert(changed)
-                    println((source, t.symbol, previousDefs.find(_.symbol == t.symbol)))
+                    assert(previousDefs.exists(_.symbol == t.symbol))
+                    val refs = captures(source)
+                    for ref <- refs do
+                      val pos = consumed.clashing(ref)
+                      if pos != null then consumeError(ref, pos, tree.srcPos)
+                    for ref <- refs do consumed.put(ref, source.srcPos, t.symbol)
                   case _ =>
                     report.error(em"Invalid call to `bindCapturesTo`\n\n$tree", tree.srcPos)
-                // target.changeNonLocalOwners
         case _: Block | _: Template =>
           traverseSection(tree)
         case tree: ValDef =>
