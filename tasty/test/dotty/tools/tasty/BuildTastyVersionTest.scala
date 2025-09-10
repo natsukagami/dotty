@@ -15,8 +15,7 @@ class BuildTastyVersionTest {
 
   @Test def testBuildTastyVersion(): Unit = {
     val expectedVersion = sys.env.get(ExpectedTastyVersionEnvVar)
-      .getOrElse(fail(s"Env variable $ExpectedTastyVersionEnvVar not defined"))
-      .match {
+      .getOrElse(fail(s"Env variable $ExpectedTastyVersionEnvVar not defined")) match {
         case s"$major.$minor-experimental-$experimental" => TastyVersion(major.toInt, minor.toInt, experimental.toInt)
         case s"$major.$minor" if minor.forall(_.isDigit) => TastyVersion(major.toInt, minor.toInt, 0)
         case other => fail(s"Invalid TASTY version string: $other")

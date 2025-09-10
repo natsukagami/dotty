@@ -1419,6 +1419,7 @@ object Build {
     .dependsOn(`scala3-compiler-bootstrapped-new`) // TODO: Would this actually evict the reference compiler in scala-tool?
     .settings(publishSettings)
     .settings(
+      bspEnabled    := false,
       name          := "scala3-sbt-bridge-bootstrapped",
       moduleName    := "scala3-sbt-bridge",
       version       := dottyVersion,
@@ -1487,6 +1488,7 @@ object Build {
     .dependsOn(`scala3-compiler-bootstrapped-new` % "provided; compile->runtime; test->test")
     .settings(publishSettings)
     .settings(
+      bspEnabled    := false,
       name          := "scala3-staging",
       moduleName    := "scala3-staging",
       version       := dottyVersion,
@@ -1694,6 +1696,7 @@ object Build {
     .enablePlugins(ScalaLibraryPlugin)
     .settings(publishSettings)
     .settings(
+      bspEnabled    := false,
       name          := "scala-library-bootstrapped",
       moduleName    := "scala-library",
       version       := dottyVersion,
@@ -2285,6 +2288,7 @@ object Build {
     .dependsOn(`scala3-interfaces`, `tasty-core-bootstrapped-new`, `scala3-library-bootstrapped-new`)
     .settings(publishSettings)
     .settings(
+      bspEnabled    := false,
       name          := "scala3-compiler-bootstrapped",
       moduleName    := "scala3-compiler",
       version       := dottyVersion,
