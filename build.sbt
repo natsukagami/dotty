@@ -1,3 +1,5 @@
+ThisBuild / resolvers += Resolver.scalaNightlyRepository
+
 val scala3 = Build.scala3
 val `scala3-nonbootstrapped` = Build.`scala3-nonbootstrapped`
 val `scala3-bootstrapped` = Build.`scala3-bootstrapped`
@@ -55,6 +57,8 @@ val sjsJUnitTests = Build.sjsJUnitTests
 val sjsCompilerTests = Build.sjsCompilerTests
 
 val `sbt-test` = Build.`sbt-test`
+
+
 
 inThisBuild(Build.thisBuildSettings)
 inScope(Global)(Build.globalSettings)

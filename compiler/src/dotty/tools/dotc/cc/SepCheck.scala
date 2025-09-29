@@ -963,7 +963,7 @@ class SepCheck(checker: CheckCaptures.CheckerAPI) extends tpd.TreeTraverser:
             case _: MethodOrPoly =>
             case _ =>
               traverseApply(tree)
-              if tree.fun.symbol == defn.Caps_bindCapturesTo then
+              if tree.fun.symbol == defn.Caps_scopedCapture then
                 tree.args match
                   case List(source, t @ Ident(_)) =>
                     assert(previousDefs.exists(_.symbol == t.symbol))
