@@ -1846,8 +1846,9 @@ class Namer { typer: Typer =>
    *                  defined symbol, given its final return type
    */
   def valOrDefDefSig(mdef: ValOrDefDef, sym: Symbol, paramss: List[List[Symbol]], paramFn: Type => Type)(using Context): Type = {
-
-    def inferredType = inferredResultType(mdef, sym, paramss, paramFn, WildcardType)
+    def inferredType = trace.force(i"inferred type for $mdef") {
+      inferredResultType(mdef, sym, paramss, paramFn, WildcardType)
+    }
 
     val tptProto = mdef.tpt match {
       case _: untpd.DerivedTypeTree =>
@@ -1963,7 +1964,7 @@ class Namer { typer: Typer =>
     val paramSymss = normalizeIfConstructor(ddef.paramss.nestedMap(symbolOfTree), isConstructor, Some(ddef.nameSpan.startPos))
     sym.setParamss(paramSymss)
 
-    def wrapMethType(restpe: Type): Type =
+    def wrapMethType(restpe: Type): Type = trace.force(i"wrapping methType for $restpe"):
       instantiateDependent(restpe, paramSymss)
       methodType(paramSymss, restpe, ddef.mods.is(JavaDefined))
 
